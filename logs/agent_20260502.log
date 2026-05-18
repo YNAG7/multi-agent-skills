@@ -1,0 +1,67 @@
+2026-05-02 01:53:07,944 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 01:54:39,537 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 01:54:57,786 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 01:55:14,070 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 01:56:44,446 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 01:57:34,320 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 01:57:53,488 - agent - INFO - mcp_tool_loader.py:135 - [MCP Tool Loader] 已加载 MCP tools: ['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 01:57:53,488 - agent - INFO - registry.py:183 - [Skill Registry] 已为 Skill 注入远端 MCP Tools: base-assistant, mcp_tools=['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 01:58:06,284 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 01:59:37,299 - agent - ERROR - mcp_tool_loader.py:143 - [MCP Tool Loader] MCP 工具加载失败: unhandled errors in a TaskGroup (1 sub-exception)
+2026-05-02 01:59:51,272 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 02:01:54,016 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 02:03:36,360 - agent - ERROR - auto_script_loader.py:181 - [Common Tool Loader] 加载公共工具模块失败: agent.tools.common_tools, error=[WinError 10060] 由于连接方在一段时间后没有正确答复或连接的主机没有反应，连接尝试失败。
+2026-05-02 02:03:37,670 - agent - INFO - mcp_tool_loader.py:135 - [MCP Tool Loader] 已加载 MCP tools: ['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:03:37,672 - agent - INFO - registry.py:183 - [Skill Registry] 已为 Skill 注入远端 MCP Tools: base-assistant, mcp_tools=['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:10:05,269 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 02:10:20,936 - agent - INFO - mcp_tool_loader.py:135 - [MCP Tool Loader] 已加载 MCP tools: ['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:10:20,936 - agent - INFO - registry.py:183 - [Skill Registry] 已为 Skill 注入远端 MCP Tools: base-assistant, mcp_tools=['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:10:31,858 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 02:10:48,585 - agent - INFO - mcp_tool_loader.py:135 - [MCP Tool Loader] 已加载 MCP tools: ['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:10:48,586 - agent - INFO - registry.py:183 - [Skill Registry] 已为 Skill 注入远端 MCP Tools: base-assistant, mcp_tools=['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:13:01,418 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 02:13:18,503 - agent - INFO - mcp_tool_loader.py:135 - [MCP Tool Loader] 已加载 MCP tools: ['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:13:18,504 - agent - INFO - registry.py:183 - [Skill Registry] 已为 Skill 注入远端 MCP Tools: base-assistant, mcp_tools=['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:15:59,854 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 02:16:15,906 - agent - INFO - mcp_tool_loader.py:135 - [MCP Tool Loader] 已加载 MCP tools: ['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:16:15,907 - agent - INFO - registry.py:183 - [Skill Registry] 已为 Skill 注入远端 MCP Tools: base-assistant, mcp_tools=['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:24:48,436 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 02:25:05,721 - agent - INFO - mcp_tool_loader.py:135 - [MCP Tool Loader] 已加载 MCP tools: ['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:25:05,722 - agent - INFO - registry.py:183 - [Skill Registry] 已为 Skill 注入远端 MCP Tools: base-assistant, mcp_tools=['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:29:54,794 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 02:30:11,867 - agent - INFO - mcp_tool_loader.py:135 - [MCP Tool Loader] 已加载 MCP tools: ['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:30:11,867 - agent - INFO - registry.py:183 - [Skill Registry] 已为 Skill 注入远端 MCP Tools: base-assistant, mcp_tools=['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:34:46,516 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 02:35:04,875 - agent - INFO - mcp_tool_loader.py:135 - [MCP Tool Loader] 已加载 MCP tools: ['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:35:04,875 - agent - INFO - registry.py:183 - [Skill Registry] 已为 Skill 注入远端 MCP Tools: base-assistant, mcp_tools=['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:40:20,230 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 02:40:34,898 - agent - INFO - mcp_tool_loader.py:135 - [MCP Tool Loader] 已加载 MCP tools: ['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:40:34,899 - agent - INFO - registry.py:183 - [Skill Registry] 已为 Skill 注入远端 MCP Tools: base-assistant, mcp_tools=['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:42:59,063 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 02:43:16,039 - agent - INFO - mcp_tool_loader.py:135 - [MCP Tool Loader] 已加载 MCP tools: ['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:43:16,039 - agent - INFO - registry.py:183 - [Skill Registry] 已为 Skill 注入远端 MCP Tools: base-assistant, mcp_tools=['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:47:40,469 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 02:47:57,635 - agent - INFO - mcp_tool_loader.py:135 - [MCP Tool Loader] 已加载 MCP tools: ['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:47:57,636 - agent - INFO - registry.py:183 - [Skill Registry] 已为 Skill 注入远端 MCP Tools: base-assistant, mcp_tools=['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:48:10,719 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 02:48:22,951 - agent - ERROR - mcp_tool_loader.py:143 - [MCP Tool Loader] MCP 工具加载失败: unhandled errors in a TaskGroup (1 sub-exception)
+2026-05-02 02:49:29,417 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 02:49:45,123 - agent - INFO - mcp_tool_loader.py:135 - [MCP Tool Loader] 已加载 MCP tools: ['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 02:49:45,123 - agent - INFO - registry.py:183 - [Skill Registry] 已为 Skill 注入远端 MCP Tools: base-assistant, mcp_tools=['get-current-date', 'get-interline-tickets', 'get-station-by-telecode', 'get-station-code-by-names', 'get-station-code-of-citys', 'get-stations-code-in-city', 'get-tickets', 'get-train-route-stations']
+2026-05-02 16:09:27,416 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 16:09:37,471 - agent - ERROR - mcp_tool_loader.py:143 - [MCP Tool Loader] MCP 工具加载失败: Configuration error: Missing 'transport' key in server configuration. Each server must include 'transport' with one of: 'stdio', 'sse', 'websocket', 'http'. Please refer to the langchain-mcp-adapters documentation for more details.
+2026-05-02 16:10:18,635 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 16:10:29,217 - agent - ERROR - mcp_tool_loader.py:143 - [MCP Tool Loader] MCP 工具加载失败: Configuration error: Missing 'transport' key in server configuration. Each server must include 'transport' with one of: 'stdio', 'sse', 'websocket', 'http'. Please refer to the langchain-mcp-adapters documentation for more details.
+2026-05-02 16:11:54,923 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 16:12:05,252 - agent - ERROR - mcp_tool_loader.py:143 - [MCP Tool Loader] MCP 工具加载失败: Unsupported transport: streamableHttp. Must be one of: 'stdio', 'sse', 'websocket', 'http'
+2026-05-02 16:12:45,680 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 16:12:57,563 - agent - ERROR - mcp_tool_loader.py:143 - [MCP Tool Loader] MCP 工具加载失败: _create_streamable_http_session() got an unexpected keyword argument 'description'
+2026-05-02 16:13:41,522 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 16:14:21,408 - agent - ERROR - mcp_tool_loader.py:143 - [MCP Tool Loader] MCP 工具加载失败: unhandled errors in a TaskGroup (1 sub-exception)
+2026-05-02 16:15:45,518 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 16:16:27,210 - agent - ERROR - mcp_tool_loader.py:143 - [MCP Tool Loader] MCP 工具加载失败: unhandled errors in a TaskGroup (1 sub-exception)
+2026-05-02 16:18:46,558 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 16:24:44,121 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-02 16:26:26,478 - agent - ERROR - auto_script_loader.py:181 - [Common Tool Loader] 加载公共工具模块失败: agent.tools.common_tools, error=[WinError 10060] 由于连接方在一段时间后没有正确答复或连接的主机没有反应，连接尝试失败。
+2026-05-02 16:26:27,429 - agent - INFO - mcp_tool_loader.py:135 - [MCP Tool Loader] 已加载 MCP tools: ['chatCompletions']
+2026-05-02 16:26:27,430 - agent - INFO - registry.py:183 - [Skill Registry] 已为 Skill 注入远端 MCP Tools: base-assistant, mcp_tools=['chatCompletions']

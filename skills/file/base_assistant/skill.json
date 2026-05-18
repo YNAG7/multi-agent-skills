@@ -1,0 +1,11 @@
+{
+  "name": "base-assistant",
+  "description": "基础助手能力，提供通用对话、基础任务处理，以及远端 MCP 工具调用能力。",
+  "enabled": true,
+  "can_be_main": true,
+  "needs_time_context": false,
+  "mcp_servers": {
+    
+  },
+  "mcp_tool_allowlist": []
+}

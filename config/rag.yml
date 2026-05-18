@@ -1,0 +1,4 @@
+smart_chat_model_name: qwen3-max
+cheap_chat_model_name: qwen-turbo
+embedding_model_name: text-embedding-v4
+reranker_model_name: BAAI/bge-reranker-v2-m3
