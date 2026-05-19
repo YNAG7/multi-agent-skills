@@ -1,18 +1,15 @@
 from agent.graph.state import AgentState
 from agent.graph.select_router import select_skill
 
-
 def router_node(state: AgentState):
-    # 取用户最后一句话做路由
     last_msg = state["messages"][-1].content
+    
+    # 此时 select_skill 返回的是一个 List[Dict]
+    route_plan = select_skill(last_msg) 
+    
+    print(f"\n[🚦 路由生成计划] {route_plan}")
 
-    # 只判断一个主 skill
-    main_skill = select_skill(last_msg)
-
-    # 打印出来，方便调试
-    print(f"\n[🚦 路由判断] main_skill={main_skill}")
-
-    # 把路由结果写回 state
+    # 核心修改：键名必须与 AgentState 中的定义严格对齐
     return {
-        "main_skill": main_skill,
+        "tasks": route_plan
     }

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, ValidationError
 from utils.prompt_loader import load_router_prompt
 from model.factory import cheap_chat_model
 from skills.skills_tools import format_skill_map, get_available_skill_descriptions
-
+from typing import List
 
 # 读取可选 skill
 main_skills_dict = get_available_skill_descriptions()
@@ -27,17 +27,17 @@ MainSkillEnum = Enum(
     {k: k for k in main_skills_dict.keys()}
 )
 
+class TaskItem(BaseModel):
+    skill: MainSkillEnum = Field(..., description="处理该子任务所需的 skill 名称。")
+    sub_task: str = Field(..., description="分配给该 skill 的具体子任务指令（例如：'查询成都今天的天气'）。")
+
 
 class SkillRoute(BaseModel):
-    main_skill: MainSkillEnum = Field(
+    plan: List[TaskItem] = Field(
         ...,
-        description="本轮任务唯一选择的主 skill，只能是候选 skill 名称之一。"
+        description="将用户的请求拆解为一组按顺序执行的任务列表。如果只有一个任务，列表中就放一项。"
     )
-
-    reason: str = Field(
-        ...,
-        description="简要说明为什么选择这个 skill。"
-    )
+    reason: str = Field(..., description="简要说明为什么这样拆解和选择这些 skill。")
 
 
 def _clean_json_text(text: str) -> str:
@@ -109,7 +109,7 @@ def _fallback_extract_skill(raw_text: str) -> str:
     return "base-assistant"
 
 
-def select_skill(user_text: str) -> str:
+def select_skill(user_text: str) -> list:
     """
     使用结构化 JSON schema 做路由。
 
@@ -134,13 +134,15 @@ def select_skill(user_text: str) -> str:
     route = _parse_skill_route(raw_text)
 
     if route is not None:
-        main_skill = route.main_skill.value
-        print(f"[Router Selected] {main_skill}")
-        print(f"[Router Reason] {route.reason}")
-        return main_skill
+        tasks_list = [
+            {"skill": item.skill.name, "sub_task": item.sub_task} 
+            for item in route.plan
+        ]
+        print(f"[Router Selected Plan] {tasks_list}")
+        return tasks_list
 
     fallback_skill = _fallback_extract_skill(raw_text)
 
     print(f"[Router Fallback Selected] {fallback_skill}")
 
-    return fallback_skill
+    return [{"skill": fallback_skill, "sub_task": user_text}]

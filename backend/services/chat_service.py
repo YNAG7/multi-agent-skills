@@ -1,7 +1,7 @@
 # backend/services/chat_service.py
 
 from sqlalchemy.orm import Session
-
+import json
 from backend.repositories.chat_repository import (
     ensure_session,
     list_messages,
@@ -48,7 +48,7 @@ async def chat_with_agent(
             # 拼接完整的回复内容
             full_assistant_message += chunk_text
             
-            yield f"data: {chunk_text}\n\n"
+            yield f"data: {json.dumps({'content': chunk_text}, ensure_ascii=False)}\n\n"
 
     save_message(
         db=db,
@@ -57,6 +57,8 @@ async def chat_with_agent(
         role="assistant",
         content=full_assistant_message
     )
+    
+    yield "data: [DONE]\n\n"
 
     
 
