@@ -1,0 +1,87 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.env/
+ENV/
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.crt
+*.p12
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Runtime databases and checkpoints
+datas/*.db
+datas/*.db-*
+datas/chat_multi_history.db
+datas/chat_multi_history.db-*
+
+# Local memory/vector stores
+datas/mem0/
+chroma_db/
+
+# Uploaded/exported archives
+*.zip
+*.tar
+*.tar.gz
+*.rar
+*.7z
+
+# Frontend dependencies and builds
+node_modules/
+dist/
+dist-ssr/
+*.local
+agent-frontend/node_modules/
+agent-frontend/dist/
+agent-frontend/dist-ssr/
+agent-frontend/vite-dev*.log
+
+# Package-manager debug logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor files
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.orig

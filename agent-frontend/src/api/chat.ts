@@ -28,6 +28,17 @@ export async function getMessages(threadId: string): Promise<ChatMessage[]> {
   return data.messages
 }
 
+export async function deleteSession(threadId: string): Promise<boolean> {
+  const data = await request<{ deleted: boolean }>(
+    `/chat/sessions/${encodeURIComponent(threadId)}`,
+    {
+      method: 'DELETE',
+    }
+  )
+
+  return data.deleted
+}
+
 
 function normalizeStreamText(data: string): string {
   if (!data || data.trim() === '[DONE]') return ''

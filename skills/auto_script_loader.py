@@ -118,7 +118,7 @@ def _load_tools_from_module(module) -> list:
     return tools
 
 
-def load_script_tools(skill_dir: str | Path) -> list:
+def load_script_tools_with_errors(skill_dir: str | Path) -> tuple[list, list[str]]:
     """
     扫描某个 Skill 文件夹下面的 scripts 目录。
 
@@ -132,10 +132,11 @@ def load_script_tools(skill_dir: str | Path) -> list:
     scripts_dir = skill_dir / "scripts"
 
     if not scripts_dir.exists():
-        return []
+        return [], []
 
     all_tools = []
     seen_tool_names = set()
+    errors: list[str] = []
 
     for py_file in scripts_dir.rglob("*.py"):
         # 跳过 __init__.py 和 _ 开头的内部文件
@@ -162,8 +163,17 @@ def load_script_tools(skill_dir: str | Path) -> list:
         except Exception as e:
             logger.error(f"[Skill Script Loader] 加载失败: {py_file}")
             logger.error(f"[Skill Script Loader] 错误信息: {e}")
+            errors.append(f"{py_file}: {e}")
 
-    return all_tools
+    return all_tools, errors
+
+
+def load_script_tools(skill_dir: str | Path) -> list:
+    """
+    Backward-compatible wrapper used by older call sites.
+    """
+    tools, _ = load_script_tools_with_errors(skill_dir)
+    return tools
 
 def load_common_tools(module_path: str = "agent.tools.common_tools") -> list:
     """

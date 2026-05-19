@@ -1,80 +1,19 @@
 # backend/api/skill_api.py
 
-from pathlib import Path
-import re
-
-import yaml
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Response, UploadFile, status
 
 from backend.deps import get_current_user
-from backend.schemas.skill import SkillCreate
-from backend.schemas.user import CurrentUser
-from skills.registry import (
-    SKILL_REGISTRY,
-    inject_mcp_tools_into_registry,
-    reload_skill_registry,
+from backend.schemas.skill import (
+    SkillCreate,
+    SkillEnableUpdate,
+    SkillImportFromDirectory,
 )
+from backend.schemas.user import CurrentUser
+from backend.services import skill_service
 from skills.skills_tools import all_registered_tools
-from utils.path_tool import get_abs_path
 
 
 router = APIRouter()
-
-
-def _skill_payload(skill):
-    return {
-        "name": skill.name,
-        "description": skill.description,
-        "tool_count": len(skill.tools),
-        "needs_time_context": getattr(skill, "needs_time_context", False),
-        "skill_path": skill.skill_path,
-    }
-
-
-def _normalize_skill_name(name: str) -> str:
-    normalized = name.strip().lower().replace(" ", "-")
-    normalized = re.sub(r"[^a-z0-9_-]+", "-", normalized)
-    normalized = re.sub(r"-{2,}", "-", normalized).strip("-_")
-    return normalized
-
-
-def _skills_file_root() -> Path:
-    return Path(get_abs_path("skills/file")).resolve()
-
-
-def _write_skill_file(req: SkillCreate, skill_name: str) -> Path:
-    root = _skills_file_root()
-    skill_dir = (root / skill_name).resolve()
-
-    if root not in skill_dir.parents:
-        raise HTTPException(status_code=400, detail="Invalid skill name")
-
-    if skill_dir.exists():
-        raise HTTPException(status_code=409, detail="Skill already exists")
-
-    skill_dir.mkdir(parents=True, exist_ok=False)
-
-    meta = {
-        "name": skill_name,
-        "description": req.description.strip(),
-    }
-
-    if req.needs_time_context:
-        meta["needs_time_context"] = True
-
-    yaml_text = yaml.safe_dump(
-        meta,
-        allow_unicode=True,
-        sort_keys=False,
-    )
-
-    skill_md = skill_dir / "SKILL.md"
-    skill_md.write_text(
-        f"---\n{yaml_text}---\n\n{req.content.strip()}\n",
-        encoding="utf-8",
-    )
-
-    return skill_md
 
 
 @router.get("")
@@ -82,36 +21,51 @@ def list_skills(
     current_user: CurrentUser = Depends(get_current_user),
 ):
     return {
-        "skills": [_skill_payload(skill) for skill in SKILL_REGISTRY.values()]
+        "skills": skill_service.list_skills()
     }
 
 
-@router.post("", status_code=201)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_skill(
     req: SkillCreate,
     current_user: CurrentUser = Depends(get_current_user),
 ):
-    skill_name = _normalize_skill_name(req.name)
-
-    if not skill_name:
-        raise HTTPException(
-            status_code=400,
-            detail="Skill name must contain letters, numbers, '-' or '_'",
-        )
-
-    if skill_name in SKILL_REGISTRY:
-        raise HTTPException(status_code=409, detail="Skill already exists")
-
-    _write_skill_file(req, skill_name)
-    reload_skill_registry()
-    await inject_mcp_tools_into_registry()
-
-    skill = SKILL_REGISTRY.get(skill_name)
-    if skill is None:
-        raise HTTPException(status_code=500, detail="Skill was created but not loaded")
-
     return {
-        "skill": _skill_payload(skill)
+        "skill": await skill_service.create_prompt_skill(req)
+    }
+
+
+@router.post("/import/zip", status_code=status.HTTP_201_CREATED)
+async def import_skill_zip(
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    return await skill_service.import_skill_zip(file)
+
+
+@router.post("/import/zip/preview")
+async def preview_skill_zip(
+    file: UploadFile = File(...),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    return await skill_service.preview_skill_zip(file)
+
+
+@router.post("/import/directory", status_code=status.HTTP_201_CREATED)
+async def import_skill_directory(
+    req: SkillImportFromDirectory,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    return await skill_service.import_skill_directory(req.source)
+
+
+@router.post("/reload")
+async def reload_skills(
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    await skill_service.reload_runtime()
+    return {
+        "skills": skill_service.list_skills()
     }
 
 
@@ -130,3 +84,33 @@ def list_tools(
             for tool in tools
         ]
     }
+
+
+@router.get("/{skill_name}")
+def skill_detail(
+    skill_name: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    return {
+        "skill": skill_service.get_skill_detail(skill_name)
+    }
+
+
+@router.patch("/{skill_name}/enabled")
+async def set_skill_enabled(
+    skill_name: str,
+    req: SkillEnableUpdate,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    return {
+        "skill": await skill_service.set_skill_enabled(skill_name, req.enabled)
+    }
+
+
+@router.delete("/{skill_name}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_skill(
+    skill_name: str,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    await skill_service.delete_skill(skill_name)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

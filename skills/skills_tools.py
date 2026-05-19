@@ -7,7 +7,12 @@ def get_skill(name: str) -> SkillSpec:
     """
     根据 skill 名称获取 SkillSpec。
     """
-    return SKILL_REGISTRY[name]
+    skill = SKILL_REGISTRY[name]
+
+    if not skill.enabled:
+        raise KeyError(f"Skill is disabled: {name}")
+
+    return skill
 
 
 def get_available_skills() -> dict[str, SkillSpec]:
@@ -23,6 +28,7 @@ def get_available_skills() -> dict[str, SkillSpec]:
     return {
         k: v
         for k, v in SKILL_REGISTRY.items()
+        if v.enabled
     }
 
 def get_available_skill_descriptions() -> dict[str, str]:
@@ -33,6 +39,7 @@ def get_available_skill_descriptions() -> dict[str, str]:
     return {
         k: v.description
         for k, v in SKILL_REGISTRY.items()
+        if v.enabled
     }
 
 
@@ -45,6 +52,7 @@ def get_skill_map() -> dict[str, str]:
     return {
         spec.name: spec.description
         for spec in SKILL_REGISTRY.values()
+        if spec.enabled
     }
 
 
@@ -59,6 +67,9 @@ def all_registered_tools() -> list[Callable]:
     seen: set[str] = set()
 
     for skill in SKILL_REGISTRY.values():
+        if not skill.enabled:
+            continue
+
         for tool in skill.tools:
             tool_name = getattr(tool, "name", None) or getattr(tool, "__name__", str(tool))
 

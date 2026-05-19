@@ -5,9 +5,11 @@ from __future__ import annotations
 from typing import Any
 from datetime import datetime
 
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, RemoveMessage
+from langgraph.graph.message import REMOVE_ALL_MESSAGES
 
 from agent.graph.builder import build_multi_agent_graph
+from agent.graph.state import RESET_AGENT_RESULTS
 
 
 class AgentService:
@@ -28,6 +30,40 @@ class AgentService:
         self.graph, self.conn, self.memory = await build_multi_agent_graph()
         self._initialized = True
 
+    async def reload(self):
+        """
+        Rebuild the LangGraph runtime after skills/tools change on disk.
+        """
+        try:
+            from agent.graph.nodes import _LLM_WITH_TOOLS_CACHE
+
+            _LLM_WITH_TOOLS_CACHE.clear()
+        except Exception:
+            pass
+
+        new_graph, new_conn, new_memory = await build_multi_agent_graph()
+
+        old_conn = self.conn
+        self.graph = new_graph
+        self.conn = new_conn
+        self.memory = new_memory
+        self._initialized = True
+
+        if old_conn:
+            await old_conn.close()
+
+    @staticmethod
+    def _build_graph_input(message: str) -> dict[str, Any]:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return {
+            "messages": [
+                RemoveMessage(id=REMOVE_ALL_MESSAGES),
+                HumanMessage(content=f"[User Message Time: {now}]\n{message}"),
+            ],
+            "tasks": [],
+            "agent_results": [RESET_AGENT_RESULTS],
+        }
+
     async def chat(
         self,
         message: str,
@@ -38,16 +74,8 @@ class AgentService:
                 "AgentService 尚未初始化，请先在 FastAPI lifespan/startup 中调用 await agent_service.init()"
             )
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
         result = await self.graph.ainvoke(
-            {
-                "messages": [
-                    HumanMessage(
-                        content=f"[User Message Time: {now}]\n{message}"
-                    )
-                ]
-            },
+            self._build_graph_input(message),
             config={
                 "configurable": {
                     "thread_id": thread_id
@@ -68,6 +96,7 @@ class AgentService:
         self,
         message: str,
         thread_id: str,
+        context_text: str | None = None,
     ):
         """
         新增：流式对话方法
@@ -78,44 +107,30 @@ class AgentService:
                 "AgentService 尚未初始化，请先在 FastAPI lifespan/startup 中调用 await agent_service.init()"
             )
 
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        prompt_text = context_text or message
 
-        # 构造输入和配置 (跟原来一模一样)
-        inputs = {
-            "messages": [
-                HumanMessage(
-                    content=f"[User Message Time: {now}]\n{message}"
-                )
-            ]
-        }
+        inputs = self._build_graph_input(prompt_text)
         config = {
             "configurable": {
                 "thread_id": thread_id
             }
         }
 
-        # 关键改变：使用 astream_events 替代 ainvoke
-        # version="v2" 是 LangChain 官方推荐的事件流版本
         async for event in self.graph.astream_events(
             inputs, 
             config=config, 
             version="v2"
         ):
            if event["event"] == "on_chat_model_stream":
-                # 【新增核心逻辑】：揪出当前正在“说话”的节点是谁
+
                 metadata = event.get("metadata", {})
                 node_name = metadata.get("langgraph_node")
+                if node_name != "summarizer":
+                    continue            
                 
-                # 【过滤器】：如果当前说话的节点是“路由节点”，我们就忽略它，不把它推给前端！
-                # 注意：请将 "router" 换成你代码中真实的路由节点名称。
-                # 如果你不知道路由节点叫什么名字，你可以反过来写，只允许业务节点输出：
-                # if node_name in ["base-assistant", "search-agent"]: 
-                
-                if node_name != "router":  # <--- 根据你的图结构修改这里
-                    
-                    chunk = event["data"]["chunk"]
-                    if chunk.content and isinstance(chunk.content, str):
-                        yield chunk.content
+                chunk = event["data"]["chunk"]
+                if chunk.content and isinstance(chunk.content, str):
+                    yield chunk.content
         
         
 

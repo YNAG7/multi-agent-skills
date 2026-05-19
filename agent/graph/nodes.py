@@ -23,6 +23,9 @@ async def worker_agent_node(state):
     sub_task_desc = task["sub_task"]
     skill_spec = SKILL_REGISTRY[skill_name]
 
+    if not skill_spec.enabled:
+        raise ValueError(f"Skill is disabled: {skill_name}")
+
     system_prompt = skill_spec.load_text()
     current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     

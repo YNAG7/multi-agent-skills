@@ -108,6 +108,9 @@ def _fallback_extract_skill(
 def select_skill(user_text: str) -> list[dict[str, str]]:
     skills_dict, skills_block, skill_names = _get_skill_context()
 
+    if not skill_names:
+        return [{"skill": "", "sub_task": user_text}]
+
     prompt = load_router_prompt().format(
         last_msg=user_text,
         main_block=skills_block,

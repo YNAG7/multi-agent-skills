@@ -42,6 +42,9 @@ async def build_multi_agent_graph():
     # ==========================================
     async def run_worker_subgraph(state: WorkerState):
         skill_name = state.get("task_info", {}).get("skill", "未知技能")
+        if not skill_name or skill_name not in SKILL_REGISTRY or not SKILL_REGISTRY[skill_name].enabled:
+            return {"agent_results": [f"[Skill unavailable]: {skill_name or 'none'}"]}
+
         try:
             # 独立运行子图
             subgraph_config = {"recursion_limit": 5}

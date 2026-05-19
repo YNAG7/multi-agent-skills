@@ -87,3 +87,4 @@ class ChatMessage(Base):
         default=datetime.now,
         nullable=False,
     )
+
