@@ -4,49 +4,38 @@ from __future__ import annotations
 
 import json
 import re
-from enum import Enum
+from typing import List
 
 from pydantic import BaseModel, Field, ValidationError
 
-from utils.prompt_loader import load_router_prompt
 from model.factory import cheap_chat_model
 from skills.skills_tools import format_skill_map, get_available_skill_descriptions
-from typing import List
+from utils.prompt_loader import load_router_prompt
 
-# 读取可选 skill
-main_skills_dict = get_available_skill_descriptions()
-main_block = format_skill_map(main_skills_dict)
-main_names = list(main_skills_dict.keys())
-
-print(main_block)
-
-
-# 动态构造枚举
-MainSkillEnum = Enum(
-    "MainSkillEnum",
-    {k: k for k in main_skills_dict.keys()}
-)
 
 class TaskItem(BaseModel):
-    skill: MainSkillEnum = Field(..., description="处理该子任务所需的 skill 名称。")
-    sub_task: str = Field(..., description="分配给该 skill 的具体子任务指令（例如：'查询成都今天的天气'）。")
+    skill: str = Field(..., description="Skill name for this sub task.")
+    sub_task: str = Field(..., description="Concrete sub task instruction.")
 
 
 class SkillRoute(BaseModel):
     plan: List[TaskItem] = Field(
         ...,
-        description="将用户的请求拆解为一组按顺序执行的任务列表。如果只有一个任务，列表中就放一项。"
+        description="A task plan. Use a single item when only one task is needed.",
     )
-    reason: str = Field(..., description="简要说明为什么这样拆解和选择这些 skill。")
+    reason: str = Field(..., description="Brief routing reason.")
+
+
+def _get_skill_context() -> tuple[dict[str, str], str, list[str]]:
+    skills_dict = get_available_skill_descriptions()
+    skills_block = format_skill_map(skills_dict)
+    skill_names = list(skills_dict.keys())
+    return skills_dict, skills_block, skill_names
 
 
 def _clean_json_text(text: str) -> str:
-    """
-    清理模型返回的 JSON 文本。
-    """
     text = text.strip()
 
-    # 去掉 markdown 代码块
     if text.startswith("```"):
         text = text.replace("```json", "")
         text = text.replace("```", "")
@@ -56,16 +45,11 @@ def _clean_json_text(text: str) -> str:
 
 
 def _extract_json_object(text: str) -> str | None:
-    """
-    从模型输出中提取 JSON 对象字符串。
-    """
     text = _clean_json_text(text)
 
-    # 如果本身就是 JSON
     if text.startswith("{") and text.endswith("}"):
         return text
 
-    # 从长文本里提取第一个 {...}
     match = re.search(r"\{[\s\S]*\}", text)
     if match:
         return match.group(0)
@@ -73,10 +57,10 @@ def _extract_json_object(text: str) -> str | None:
     return None
 
 
-def _parse_skill_route(raw_text: str) -> SkillRoute | None:
-    """
-    用 Pydantic schema 校验模型输出。
-    """
+def _parse_skill_route(
+    raw_text: str,
+    valid_skill_names: list[str],
+) -> SkillRoute | None:
     json_str = _extract_json_object(raw_text)
 
     if not json_str:
@@ -84,7 +68,15 @@ def _parse_skill_route(raw_text: str) -> SkillRoute | None:
 
     try:
         data = json.loads(json_str)
-        return SkillRoute.model_validate(data)
+        route = SkillRoute.model_validate(data)
+        valid_names = set(valid_skill_names)
+
+        for item in route.plan:
+            if item.skill not in valid_names:
+                print(f"[Router Validation Error] Unknown skill: {item.skill}")
+                return None
+
+        return route
     except ValidationError as e:
         print(f"[Router Validation Error] {e}")
         return None
@@ -93,56 +85,51 @@ def _parse_skill_route(raw_text: str) -> SkillRoute | None:
         return None
 
 
-def _fallback_extract_skill(raw_text: str) -> str:
-    """
-    最后兜底：从文本里找 skill 名称。
-    """
+def _fallback_extract_skill(
+    raw_text: str,
+    skills_dict: dict[str, str],
+    skill_names: list[str],
+) -> str:
     raw_text = raw_text.strip()
 
-    if raw_text in main_skills_dict:
+    if raw_text in skills_dict:
         return raw_text
 
-    for name in main_names:
+    for name in skill_names:
         if name in raw_text:
             return name
 
-    return "base-assistant"
+    if "base-assistant" in skills_dict:
+        return "base-assistant"
+
+    return skill_names[0] if skill_names else ""
 
 
-def select_skill(user_text: str) -> list:
-    """
-    使用结构化 JSON schema 做路由。
-
-    注意：
-    这里不使用 with_structured_output。
-    原因是 qwen-turbo 可能返回普通 JSON 文本，而不是 tool_call。
-    我们仍然使用 Pydantic SkillRoute 做结构化校验。
-    """
+def select_skill(user_text: str) -> list[dict[str, str]]:
+    skills_dict, skills_block, skill_names = _get_skill_context()
 
     prompt = load_router_prompt().format(
         last_msg=user_text,
-        main_block=main_block,
-        main_names=", ".join(main_names),
+        main_block=skills_block,
+        main_names=", ".join(skill_names),
     )
 
     res = cheap_chat_model.invoke(prompt)
-
     raw_text = getattr(res, "content", str(res)).strip()
 
     print(f"[Router Raw] {raw_text}")
 
-    route = _parse_skill_route(raw_text)
+    route = _parse_skill_route(raw_text, skill_names)
 
     if route is not None:
         tasks_list = [
-            {"skill": item.skill.name, "sub_task": item.sub_task} 
+            {"skill": item.skill, "sub_task": item.sub_task}
             for item in route.plan
         ]
         print(f"[Router Selected Plan] {tasks_list}")
         return tasks_list
 
-    fallback_skill = _fallback_extract_skill(raw_text)
-
+    fallback_skill = _fallback_extract_skill(raw_text, skills_dict, skill_names)
     print(f"[Router Fallback Selected] {fallback_skill}")
 
     return [{"skill": fallback_skill, "sub_task": user_text}]

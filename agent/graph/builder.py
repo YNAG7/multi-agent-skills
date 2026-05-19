@@ -9,7 +9,7 @@ import aiosqlite
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from utils.path_tool import get_abs_path
 from skills.skills_tools import all_registered_tools
-
+from utils.logger_handler import logger
 def tools_condition(state: WorkerState):
     """子图内部的工具判断"""
     last_message = state["messages"][-1]
@@ -41,13 +41,16 @@ async def build_multi_agent_graph():
     # 2. 包装子图节点：捕获结果并回传给主图
     # ==========================================
     async def run_worker_subgraph(state: WorkerState):
-        # 独立运行子图
-        result = await worker_graph.ainvoke(state)
-        # 获取子图执行完毕后的最终回复
-        final_msg = result["messages"][-1].content
-        skill_name = state["task_info"]["skill"]
-        # 返回给主图的 agent_results（利用 operator.add 自动聚合成列表）
-        return {"agent_results": [f"[{skill_name} 处理结果]:\n{final_msg}"]}
+        skill_name = state.get("task_info", {}).get("skill", "未知技能")
+        try:
+            # 独立运行子图
+            subgraph_config = {"recursion_limit": 5}
+            result = await worker_graph.ainvoke(state,config=subgraph_config)
+            final_msg = result["messages"][-1].content
+            return {"agent_results": [f"[{skill_name} 成功处理]:\n{final_msg}"]}
+        except Exception as e:
+            logger.warning(f"[⚠️ Worker 异常] {skill_name} 执行失败: {e}")
+            return {"agent_results": [f"[{skill_name} 处理失败]:\n系统执行该子任务时遇到异常（{str(e)}），请忽略此部分结果并向用户致歉。"]}
 
     # ==========================================
     # 3. 主图并行分发逻辑 (Map 过程)

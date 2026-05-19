@@ -189,3 +189,16 @@ async def inject_mcp_tools_into_registry(
 
 # 初始化全局注册表
 SKILL_REGISTRY = build_skill_registry()
+
+
+def reload_skill_registry(skills_root: str = "skills") -> dict[str, SkillSpec]:
+    """
+    Re-scan skills from disk and refresh the existing registry object in place.
+
+    Several modules import SKILL_REGISTRY directly, so mutating the dict keeps
+    those references current after a skill is created from the API.
+    """
+    refreshed = build_skill_registry(skills_root)
+    SKILL_REGISTRY.clear()
+    SKILL_REGISTRY.update(refreshed)
+    return SKILL_REGISTRY

@@ -5,3 +5,13 @@
 2026-05-19 17:48:54,170 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
 2026-05-19 17:50:18,889 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
 2026-05-19 17:50:42,861 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-19 20:43:16,219 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-19 20:49:24,933 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-19 20:53:40,956 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-19 20:54:02,701 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-19 20:57:51,560 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-19 20:59:34,810 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-19 21:00:30,372 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-19 21:00:50,547 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-19 21:01:10,331 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
+2026-05-19 21:07:21,381 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
