@@ -1,8 +1,0 @@
-2026-04-27 15:25:09,158 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
-2026-04-27 15:40:53,227 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
-2026-04-27 15:42:11,269 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
-2026-04-27 16:05:57,771 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
-2026-04-27 21:19:01,057 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
-2026-04-27 21:19:52,417 - agent - ERROR - auto_script_loader.py:181 - [Common Tool Loader] 加载公共工具模块失败: agent.tools.common_tools, error=[WinError 10060] 由于连接方在一段时间后没有正确答复或连接的主机没有反应，连接尝试失败。
-2026-04-27 22:09:50,702 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
-2026-04-27 22:15:56,517 - agent - INFO - rag_service.py:46 - [RAG 服务] BM25 内存索引构建成功，共加载 335 个文本块。
