@@ -8,6 +8,7 @@ class CurrentUser(BaseModel):
     username: str
     nickname: str | None = None
     disabled: bool = False
+    is_admin: bool = False
 
 
 class UserOut(BaseModel):
@@ -15,3 +16,4 @@ class UserOut(BaseModel):
     username: str
     nickname: str | None = None
     disabled: bool = False
+    is_admin: bool = False

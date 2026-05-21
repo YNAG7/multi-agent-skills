@@ -4,6 +4,7 @@ import MarkdownIt from 'markdown-it'
 import DOMPurify from 'dompurify'
 import {
   AlertTriangle,
+  Activity,
   BrainCircuit,
   Check,
   CircleSlash2,
@@ -17,6 +18,7 @@ import {
   RefreshCw,
   Save,
   Send,
+  ShieldCheck,
   Sparkles,
   TerminalSquare,
   Trash2,
@@ -25,6 +27,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { deleteSession, getMessages, getSessions, sendStreamMessage } from '../api/chat'
+import { getMonitorRunDetail, getMonitorRuns, getMonitorSummary } from '../api/monitor'
 import {
   createSkill,
   deleteSkill,
@@ -38,6 +41,7 @@ import {
 } from '../api/skills'
 import type { User } from '../types/auth'
 import type { ChatMessage, ChatSession } from '../types/chat'
+import type { AgentRun, AgentRunDetail, MonitorSummary } from '../types/monitor'
 import type { Skill, SkillDetail, SkillImportPreview } from '../types/skill'
 
 type ConfirmDialogState = {
@@ -55,6 +59,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'logout'): void
+  (e: 'open-monitor'): void
 }>()
 
 const md = new MarkdownIt({
@@ -110,6 +115,14 @@ const zipPreview = ref<SkillImportPreview | null>(null)
 const importingZip = ref(false)
 const importingDirectory = ref(false)
 const importingZipConfirm = ref(false)
+const monitorPanelOpen = ref(false)
+const monitorLoading = ref(false)
+const monitorDetailLoading = ref(false)
+const monitorError = ref('')
+const monitorSummary = ref<MonitorSummary | null>(null)
+const monitorRuns = ref<AgentRun[]>([])
+const selectedRunId = ref('')
+const selectedRunDetail = ref<AgentRunDetail | null>(null)
 const confirmDialog = ref<ConfirmDialogState>({
   open: false,
   title: '',
@@ -121,6 +134,7 @@ const confirmDialog = ref<ConfirmDialogState>({
 
 const displayName = computed(() => props.user.nickname || props.user.username)
 const currentSkillTools = computed(() => selectedSkill.value?.tools || [])
+const isAdmin = computed(() => Boolean(props.user.is_admin))
 
 function createThreadId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
@@ -141,6 +155,167 @@ function formatTime(value?: string) {
     hour: '2-digit',
     minute: '2-digit',
   })
+}
+
+function formatLatency(value?: number | null) {
+  if (value === null || value === undefined) return '-'
+  if (value < 1000) return `${value} ms`
+  return `${(value / 1000).toFixed(1)} s`
+}
+
+function formatPercent(value?: number) {
+  return `${Math.round((value || 0) * 100)}%`
+}
+
+function statusText(value?: string | null) {
+  const map: Record<string, string> = {
+    success: '成功',
+    failed: '失败',
+    running: '运行中',
+    observed: '已捕获',
+  }
+  return map[value || ''] || value || '-'
+}
+
+function eventText(value?: string | null) {
+  const map: Record<string, string> = {
+    on_chain_start: '链路开始',
+    on_chain_end: '链路结束',
+    on_chain_error: '链路异常',
+    on_chat_model_start: '模型开始',
+    on_chat_model_end: '模型结束',
+    on_chat_model_stream: '模型流式输出',
+    on_llm_start: 'LLM 开始',
+    on_llm_end: 'LLM 结束',
+    on_llm_error: 'LLM 异常',
+    on_tool_start: '工具开始',
+    on_tool_end: '工具结束',
+    on_tool_error: '工具异常',
+    worker_start: '子 Agent 开始',
+    worker_end: '子 Agent 结束',
+    worker_error: '子 Agent 异常',
+  }
+  return map[value || ''] || value || '-'
+}
+
+function nodeText(value?: string | null) {
+  const map: Record<string, string> = {
+    router: '路由',
+    worker_node: '子 Agent',
+    summarizer: '总结器',
+    agent: '工具 Agent',
+    tools: '工具节点',
+    runtime: '运行时',
+  }
+  return map[value || ''] || value || '运行时'
+}
+
+function previewText(value?: string | null, max = 70) {
+  if (!value) return ''
+  const text = value.replace(/\s+/g, ' ').trim()
+  return text.length > max ? `${text.slice(0, max)}...` : text
+}
+
+function parseLegacyMessageRepr(value: string) {
+  const contentMatch = value.match(/content=(['"])([\s\S]*?)\1\s+additional_kwargs=/)
+  if (!contentMatch) return null
+
+  let content = contentMatch[2]
+  try {
+    content = JSON.parse(`"${content.replace(/"/g, '\\"')}"`)
+  } catch {
+    content = content.replace(/\\n/g, '\n').replace(/\\"/g, '"')
+  }
+
+  try {
+    return {
+      type: 'LangChainMessage',
+      content: JSON.parse(content),
+    }
+  } catch {
+    return {
+      type: 'LangChainMessage',
+      content,
+    }
+  }
+}
+
+function compactPayload(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return value
+
+  if (Array.isArray(value)) {
+    return value.map((item) => compactPayload(item))
+  }
+
+  const record = value as Record<string, unknown>
+
+  const looksLikeMessage = (
+    ('type' in record && String(record.type).includes('Message')) ||
+    'response_metadata' in record ||
+    'tool_calls' in record ||
+    'additional_kwargs' in record ||
+    'tool_call_id' in record
+  )
+
+  if ('content' in record && looksLikeMessage) {
+    const result: Record<string, unknown> = {
+      消息类型: record.type || 'Message',
+      内容: compactPayload(record.content),
+    }
+
+    if (record.name) result.名称 = record.name
+    if (record.tool_call_id) result.工具调用ID = record.tool_call_id
+    if (record.tool_calls) result.工具调用 = compactPayload(record.tool_calls)
+    if (record.response_metadata) result.模型信息 = compactPayload(record.response_metadata)
+
+    return result
+  }
+
+  const keyMap: Record<string, string> = {
+    input: '输入',
+    output: '输出',
+    messages: '消息',
+    tasks: '任务',
+    task_info: '任务信息',
+    agent_results: 'Agent 结果',
+    plan: '计划',
+    reason: '原因',
+    skill: '技能',
+    sub_task: '子任务',
+    query: '查询',
+    context: '上下文',
+    content: '内容',
+    finish_reason: '结束原因',
+    model_name: '模型',
+    model_provider: '模型提供方',
+  }
+
+  const ignored = new Set([
+    'additional_kwargs',
+    'invalid_tool_calls',
+    'usage_metadata',
+  ])
+
+  return Object.fromEntries(
+    Object.entries(record)
+      .filter(([key, val]) => !ignored.has(key) && val !== undefined && val !== null && val !== '')
+      .map(([key, val]) => [keyMap[key] || key, compactPayload(val)])
+  )
+}
+
+function prettyJson(value?: string | null) {
+  if (!value) return ''
+  try {
+    const parsed = JSON.parse(value)
+    if (typeof parsed === 'string') {
+      const legacy = parseLegacyMessageRepr(parsed)
+      return JSON.stringify(compactPayload(legacy || parsed), null, 2)
+    }
+    return JSON.stringify(compactPayload(parsed), null, 2)
+  } catch {
+    const legacy = parseLegacyMessageRepr(value)
+    return legacy ? JSON.stringify(compactPayload(legacy), null, 2) : value
+  }
 }
 
 function isActiveSkill(skill: Skill) {
@@ -183,6 +358,66 @@ function openSkillPanel() {
 
 function closeSkillPanel() {
   skillPanelOpen.value = false
+}
+
+async function openMonitorPanel() {
+  if (!isAdmin.value) return
+
+  emit('open-monitor')
+  return
+
+  monitorPanelOpen.value = true
+  await refreshMonitor()
+}
+
+function closeMonitorPanel() {
+  monitorPanelOpen.value = false
+}
+
+async function refreshMonitor() {
+  if (!isAdmin.value || monitorLoading.value) return
+
+  monitorLoading.value = true
+  monitorError.value = ''
+
+  try {
+    const [summary, runs] = await Promise.all([
+      getMonitorSummary(),
+      getMonitorRuns(80),
+    ])
+    monitorSummary.value = summary
+    monitorRuns.value = runs
+
+    if (runs.length > 0) {
+      const target = selectedRunId.value && runs.some((item) => item.run_id === selectedRunId.value)
+        ? selectedRunId.value
+        : runs[0].run_id
+      await selectMonitorRun(target)
+    } else {
+      selectedRunId.value = ''
+      selectedRunDetail.value = null
+    }
+  } catch (e: any) {
+    monitorError.value = e.message || '监控数据加载失败。'
+  } finally {
+    monitorLoading.value = false
+  }
+}
+
+async function selectMonitorRun(runId: string) {
+  if (!runId || monitorDetailLoading.value) return
+
+  selectedRunId.value = runId
+  monitorDetailLoading.value = true
+  monitorError.value = ''
+
+  try {
+    selectedRunDetail.value = await getMonitorRunDetail(runId)
+  } catch (e: any) {
+    monitorError.value = e.message || '运行详情加载失败。'
+  } finally {
+    monitorDetailLoading.value = false
+  }
 }
 
 function resetSkillForm() {
@@ -545,10 +780,6 @@ onMounted(async () => {
           <span>New Chat</span>
         </button>
 
-        <button class="nx-btn-skills" @click="openSkillPanel">
-          <BrainCircuit :size="18" />
-          <span>Skills</span>
-        </button>
       </div>
 
       <div class="nx-session-wrap">
@@ -828,6 +1059,204 @@ onMounted(async () => {
       </div>
     </aside>
 
+    <div v-if="monitorPanelOpen" class="nx-skill-backdrop" @click="closeMonitorPanel"></div>
+    <aside class="nx-skill-panel nx-monitor-panel" :class="{ 'nx-open': monitorPanelOpen }">
+      <div class="nx-skill-head">
+        <div>
+          <div class="nx-skill-kicker">管理员观测</div>
+          <h2>运行监控</h2>
+        </div>
+
+        <div class="nx-skill-actions">
+          <button class="nx-icon-btn" title="刷新监控" @click="refreshMonitor">
+            <RefreshCw :class="{ 'nx-spin': monitorLoading }" :size="18" />
+          </button>
+          <button class="nx-icon-btn" title="关闭" @click="closeMonitorPanel">
+            <X :size="18" />
+          </button>
+        </div>
+      </div>
+
+      <div class="nx-monitor-body">
+        <section class="nx-monitor-runs">
+          <div class="nx-section-head">
+            <h3>运行记录</h3>
+            <span class="nx-admin-pill">
+              <ShieldCheck :size="13" />
+              管理员
+            </span>
+          </div>
+
+          <div v-if="monitorSummary" class="nx-monitor-summary">
+            <div>
+              <label>总数</label>
+              <strong>{{ monitorSummary.total_runs }}</strong>
+            </div>
+            <div>
+              <label>成功率</label>
+              <strong>{{ formatPercent(monitorSummary.success_rate) }}</strong>
+            </div>
+            <div>
+              <label>平均耗时</label>
+              <strong>{{ formatLatency(monitorSummary.avg_latency_ms) }}</strong>
+            </div>
+          </div>
+
+          <div v-if="monitorError" class="nx-form-error">
+            {{ monitorError }}
+          </div>
+
+          <div v-if="monitorLoading" class="nx-center-loader">
+            <Loader2 class="nx-spin" :size="18" />
+          </div>
+
+          <div v-else-if="monitorRuns.length === 0" class="nx-empty-panel">
+            暂无运行记录。
+          </div>
+
+          <div v-else class="nx-monitor-run-list">
+            <button
+              v-for="run in monitorRuns"
+              :key="run.run_id"
+              class="nx-monitor-run"
+              :class="{ active: selectedRunId === run.run_id, failed: run.status === 'failed' }"
+              type="button"
+              @click="selectMonitorRun(run.run_id)"
+            >
+              <div class="nx-monitor-run-top">
+                <strong>{{ statusText(run.status) }}</strong>
+                <span>{{ formatLatency(run.latency_ms) }}</span>
+              </div>
+              <p>{{ previewText(run.input) }}</p>
+              <div class="nx-monitor-run-meta">
+                <span>用户 #{{ run.user_id }}</span>
+                <small>{{ formatTime(run.started_at) }}</small>
+              </div>
+              <div class="nx-monitor-run-meta">
+                <span>{{ run.main_skill || '无技能' }}</span>
+                <small>{{ run.run_id.slice(0, 10) }}</small>
+              </div>
+            </button>
+          </div>
+        </section>
+
+        <section class="nx-monitor-detail">
+          <div v-if="monitorDetailLoading" class="nx-center-loader full">
+            <Loader2 class="nx-spin" :size="24" />
+          </div>
+
+          <template v-else-if="selectedRunDetail">
+            <div class="nx-monitor-title">
+              <div>
+                <div class="nx-skill-kicker">{{ selectedRunDetail.run.run_id.slice(0, 12) }}</div>
+                <h3>{{ statusText(selectedRunDetail.run.status) }}</h3>
+              </div>
+              <span class="nx-status-pill" :class="selectedRunDetail.run.status">
+                {{ statusText(selectedRunDetail.run.status) }}
+              </span>
+            </div>
+
+            <div class="nx-detail-grid">
+              <div>
+                <label>用户</label>
+                <span>#{{ selectedRunDetail.run.user_id }}</span>
+              </div>
+              <div>
+                <label>会话</label>
+                <span>{{ selectedRunDetail.run.thread_id }}</span>
+              </div>
+              <div>
+                <label>主技能</label>
+                <span>{{ selectedRunDetail.run.main_skill || '-' }}</span>
+              </div>
+              <div>
+                <label>开始时间</label>
+                <span>{{ formatTime(selectedRunDetail.run.started_at) }}</span>
+              </div>
+              <div>
+                <label>耗时</label>
+                <span>{{ formatLatency(selectedRunDetail.run.latency_ms) }}</span>
+              </div>
+            </div>
+
+            <div class="nx-monitor-io">
+              <div>
+                <label>用户输入</label>
+                <pre>{{ selectedRunDetail.run.input }}</pre>
+              </div>
+              <div>
+                <label>最终输出</label>
+                <pre>{{ selectedRunDetail.run.output || '-' }}</pre>
+              </div>
+            </div>
+
+            <div class="nx-monitor-columns">
+              <section>
+                <div class="nx-section-head">
+                  <h3>执行链路</h3>
+                  <span>{{ selectedRunDetail.steps.length }}</span>
+                </div>
+
+                <div class="nx-timeline">
+                  <div
+                    v-for="step in selectedRunDetail.steps"
+                    :key="step.id"
+                    class="nx-timeline-item"
+                    :class="{ error: Boolean(step.error) || step.event_type.includes('error') }"
+                  >
+                    <div class="nx-timeline-dot"></div>
+                    <div class="nx-timeline-card">
+                      <div class="nx-timeline-head">
+                        <strong>{{ eventText(step.event_type) }}</strong>
+                        <span>#{{ step.step_index }}</span>
+                      </div>
+                      <small>{{ nodeText(step.node_name) }} / {{ formatTime(step.created_at) }}</small>
+                      <pre v-if="step.error">{{ step.error }}</pre>
+                      <pre v-else-if="step.output_json">{{ prettyJson(step.output_json) }}</pre>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <div class="nx-section-head">
+                  <h3>工具调用</h3>
+                  <span>{{ selectedRunDetail.tool_calls.length }}</span>
+                </div>
+
+                <div v-if="selectedRunDetail.tool_calls.length === 0" class="nx-empty-panel">
+                  暂未捕获工具调用。
+                </div>
+
+                <div v-else class="nx-tool-call-list">
+                  <div
+                    v-for="tool in selectedRunDetail.tool_calls"
+                    :key="tool.id"
+                    class="nx-tool-call"
+                    :class="{ failed: tool.status === 'failed' }"
+                  >
+                    <div class="nx-tool-call-head">
+                      <strong>{{ tool.tool_name }}</strong>
+                      <span>{{ statusText(tool.status) }}</span>
+                    </div>
+                    <small>#{{ tool.step_index }} / {{ formatLatency(tool.latency_ms) }}</small>
+                    <label>输入</label>
+                    <pre>{{ prettyJson(tool.tool_input_json) || '-' }}</pre>
+                    <label>输出</label>
+                    <pre>{{ prettyJson(tool.tool_output_json) || '-' }}</pre>
+                  </div>
+                </div>
+              </section>
+            </div>
+          </template>
+
+          <div v-else class="nx-empty-panel">
+            选择一条运行记录查看执行链路。
+          </div>
+        </section>
+      </div>
+    </aside>
+
     <div v-if="confirmDialog.open" class="nx-modal-backdrop" @click="cancelConfirmDialog">
       <div class="nx-confirm-modal" role="dialog" aria-modal="true" @click.stop>
         <button class="nx-confirm-close" type="button" :disabled="confirmDialog.loading" title="关闭" @click="cancelConfirmDialog">
@@ -859,13 +1288,27 @@ onMounted(async () => {
       <div class="nx-grid-bg"></div>
 
       <div class="nx-topbar">
-        <button class="nx-btn-menu" @click="toggleSidebar">
-          <Menu :size="20" />
-        </button>
+        <div class="nx-topbar-left">
+          <button class="nx-btn-menu" @click="toggleSidebar">
+            <Menu :size="20" />
+          </button>
 
-        <div class="nx-badge">
-          <span class="nx-dot"></span>
-          Thread: {{ activeThreadId.slice(0, 8) }}
+          <div class="nx-badge">
+            <span class="nx-dot"></span>
+            Thread: {{ activeThreadId.slice(0, 8) }}
+          </div>
+        </div>
+
+        <div class="nx-topbar-actions">
+          <button class="nx-topbar-btn" type="button" @click="openSkillPanel">
+            <BrainCircuit :size="18" />
+            <span>Skills</span>
+          </button>
+
+          <button v-if="isAdmin" class="nx-topbar-btn" type="button" @click="openMonitorPanel">
+            <Activity :size="18" />
+            <span>监控</span>
+          </button>
         </div>
       </div>
 
@@ -893,9 +1336,17 @@ onMounted(async () => {
               <Sparkles :size="16" />
             </div>
 
-            <div class="nx-bubble" :class="{ 'nx-markdown': msg.role === 'assistant' }">
+            <div
+              class="nx-bubble"
+              :class="{
+                'nx-markdown': msg.role === 'assistant' && msg.content,
+                'nx-bubble-waiting': msg.role === 'assistant' && !msg.content,
+              }"
+            >
               <div v-if="msg.role === 'assistant' && !msg.content" class="nx-typing">
-                <span></span><span></span><span></span>
+                <span class="nx-typing-dot"></span>
+                <span class="nx-typing-dot"></span>
+                <span class="nx-typing-dot"></span>
               </div>
               <div v-else-if="msg.role === 'assistant' && msg.content" v-html="renderMarkdown(msg.content)"></div>
               <template v-else>{{ msg.content }}</template>
@@ -1220,6 +1671,11 @@ onMounted(async () => {
   transform: translateX(0);
 }
 
+.nx-monitor-panel {
+  width: min(1180px, 82vw);
+  min-width: min(100vw, 920px);
+}
+
 .nx-skill-head,
 .nx-section-head {
   display: flex;
@@ -1287,6 +1743,224 @@ onMounted(async () => {
   padding: 18px 20px 22px;
   scrollbar-width: thin;
   scrollbar-color: rgba(100, 116, 139, 0.26) transparent;
+}
+
+.nx-monitor-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(310px, 0.74fr) minmax(560px, 1.26fr);
+  gap: 16px;
+  overflow: hidden;
+  padding: 18px 20px 22px;
+}
+
+.nx-monitor-runs,
+.nx-monitor-detail {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.nx-monitor-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.nx-monitor-summary > div {
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.nx-monitor-summary label,
+.nx-monitor-io label,
+.nx-tool-call label {
+  display: block;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.nx-monitor-summary strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 18px;
+}
+
+.nx-monitor-run-list,
+.nx-tool-call-list {
+  display: grid;
+  gap: 10px;
+}
+
+.nx-monitor-run {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #0f172a;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nx-monitor-run:hover,
+.nx-monitor-run.active {
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.08);
+}
+
+.nx-monitor-run.failed {
+  border-color: #fecaca;
+}
+
+.nx-monitor-run-top,
+.nx-monitor-run-meta,
+.nx-monitor-title,
+.nx-tool-call-head,
+.nx-timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nx-monitor-run-top span,
+.nx-monitor-run-meta span,
+.nx-status-pill,
+.nx-admin-pill,
+.nx-tool-call-head span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #ecfeff;
+  color: #0f766e;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.nx-status-pill.failed,
+.nx-tool-call.failed .nx-tool-call-head span {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.nx-status-pill.running {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.nx-monitor-run p {
+  margin: 8px 0;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.nx-monitor-run-meta small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.nx-monitor-title {
+  margin-bottom: 14px;
+}
+
+.nx-monitor-title h3 {
+  margin: 2px 0 0;
+  font-size: 22px;
+}
+
+.nx-monitor-io {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 18px;
+}
+
+.nx-monitor-io pre,
+.nx-timeline-card pre,
+.nx-tool-call pre {
+  max-height: 170px;
+  overflow: auto;
+  margin: 6px 0 0;
+  padding: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.nx-monitor-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.nx-timeline {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.nx-timeline-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.nx-timeline-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 14px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+.nx-timeline-item.error .nx-timeline-dot {
+  background: #ef4444;
+}
+
+.nx-timeline-card {
+  padding: 10px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.nx-timeline-card small,
+.nx-tool-call small {
+  display: block;
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.nx-tool-call {
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.nx-tool-call.failed {
+  border-color: #fecaca;
 }
 
 .nx-skill-left {
@@ -1790,10 +2464,27 @@ onMounted(async () => {
   height: 60px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   padding: 0 24px;
   border-bottom: 1px solid #e2e8f0;
   background-color: #ffffff !important;
   z-index: 5;
+}
+
+.nx-topbar-left,
+.nx-topbar-actions {
+  display: flex;
+  align-items: center;
+}
+
+.nx-topbar-left {
+  min-width: 0;
+}
+
+.nx-topbar-actions {
+  gap: 10px;
+  flex-shrink: 0;
 }
 
 .nx-btn-menu {
@@ -1804,6 +2495,28 @@ onMounted(async () => {
   cursor: pointer;
   padding: 6px;
   margin-right: 16px;
+}
+
+.nx-topbar-btn {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 13px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nx-topbar-btn:hover {
+  border-color: #10b981;
+  color: #047857;
+  background: #ecfdf5;
 }
 
 .nx-badge {
@@ -1895,6 +2608,20 @@ onMounted(async () => {
   color: #ffffff;
   border-radius: 16px 4px 16px 16px;
   box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2);
+}
+
+.assistant .nx-bubble-waiting {
+  width: auto;
+  min-width: 58px;
+  min-height: 34px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(236, 253, 245, 0.92);
+  border: 1px solid rgba(16, 185, 129, 0.18);
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.08);
 }
 
 .nx-markdown {
@@ -2064,24 +2791,24 @@ onMounted(async () => {
 
 .nx-typing {
   display: flex;
-  gap: 4px;
+  gap: 5px;
   align-items: center;
-  height: 48px;
+  height: 20px;
 }
 
-.nx-typing span {
-  width: 6px;
-  height: 6px;
-  background-color: #94a3b8;
+.nx-typing-dot {
+  width: 5px;
+  height: 5px;
+  background-color: #10b981;
   border-radius: 50%;
-  animation: typing 1.4s infinite ease-in-out both;
+  animation: typing 1.15s infinite ease-in-out both;
 }
 
-.nx-typing span:nth-child(1) {
+.nx-typing-dot:nth-child(1) {
   animation-delay: -0.32s;
 }
 
-.nx-typing span:nth-child(2) {
+.nx-typing-dot:nth-child(2) {
   animation-delay: -0.16s;
 }
 
@@ -2106,6 +2833,21 @@ onMounted(async () => {
   .nx-skill-body {
     grid-template-columns: 1fr;
     overflow-y: auto;
+  }
+
+  .nx-monitor-body,
+  .nx-monitor-columns,
+  .nx-monitor-io {
+    grid-template-columns: 1fr;
+  }
+
+  .nx-monitor-body {
+    overflow-y: auto;
+  }
+
+  .nx-monitor-runs,
+  .nx-monitor-detail {
+    overflow: visible;
   }
 
   .nx-skill-list {
@@ -2139,6 +2881,24 @@ onMounted(async () => {
     inset: 0;
     background: rgba(0, 0, 0, 0.4);
     z-index: 15;
+  }
+
+  .nx-topbar {
+    padding: 0 16px;
+    gap: 10px;
+  }
+
+  .nx-topbar-actions {
+    gap: 8px;
+  }
+
+  .nx-topbar-btn {
+    width: 36px;
+    padding: 0;
+  }
+
+  .nx-topbar-btn span {
+    display: none;
   }
 
   .nx-messages {

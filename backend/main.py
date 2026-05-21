@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.auth_api import router as auth_router
 from backend.api.chat_api import router as chat_router
+from backend.api.monitor_api import router as monitor_router
 from backend.api.skill_api import router as skill_router
 from backend.api.user_api import router as user_router
 from backend.core.config import settings
@@ -84,4 +85,10 @@ app.include_router(
     skill_router,
     prefix="/skills",
     tags=["Skill"],
+)
+
+app.include_router(
+    monitor_router,
+    prefix="/monitor",
+    tags=["Monitor"],
 )

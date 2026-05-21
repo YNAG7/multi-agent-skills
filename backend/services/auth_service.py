@@ -9,6 +9,7 @@ from backend.core.security import (
     hash_password,
     verify_password,
 )
+from backend.core.config import settings
 from backend.repositories.user_repository import (
     create_user_record,
     get_user_by_username,
@@ -47,6 +48,7 @@ def register_user(db: Session, req: RegisterRequest) -> TokenResponse:
             "username": user.username,
             "nickname": user.nickname,
             "disabled": user.disabled,
+            "is_admin": user.username in settings.ADMIN_USERNAMES,
         },
     )
 
@@ -86,5 +88,6 @@ def login_user(db: Session, req: LoginRequest) -> TokenResponse:
             "username": user.username,
             "nickname": user.nickname,
             "disabled": user.disabled,
+            "is_admin": user.username in settings.ADMIN_USERNAMES,
         },
     )

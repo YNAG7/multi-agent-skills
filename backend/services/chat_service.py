@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import uuid
 
 from fastapi import BackgroundTasks
 from sqlalchemy.orm import Session
@@ -19,6 +20,7 @@ from backend.schemas.user import CurrentUser
 from backend.services.agent_service import agent_service
 from backend.services.context_service import build_agent_context, compress_thread_if_needed
 from backend.services.mem0_service import mem0_service
+from backend.repositories.monitor_repository import create_agent_run, finish_agent_run
 from utils.logger_handler import logger
 
 
@@ -64,7 +66,7 @@ async def chat_with_agent(
         title=req.message[:30],
     )
 
-    save_message(
+    user_message = save_message(
         db=db,
         user_id=current_user.id,
         thread_id=req.thread_id,
@@ -72,6 +74,15 @@ async def chat_with_agent(
         content=req.message,
     )
 
+    run_id = uuid.uuid4().hex
+    create_agent_run(
+        db=db,
+        run_id=run_id,
+        thread_id=req.thread_id,
+        user_id=current_user.id,
+        input_text=req.message,
+        message_id=user_message.id,
+    )
 
     full_assistant_message = ""
     context_text = build_agent_context(
@@ -81,16 +92,30 @@ async def chat_with_agent(
         current_message=req.message,
     )
 
-    async for chunk_text in agent_service.stream_chat(
-        message=req.message,
-        thread_id=safe_thread_id,
-        context_text=context_text,
-    ):
-        if chunk_text:
+    yield f"data: {json.dumps({'run_id': run_id}, ensure_ascii=False)}\n\n"
 
-            full_assistant_message += chunk_text
-            
-            yield f"data: {json.dumps({'content': chunk_text}, ensure_ascii=False)}\n\n"
+    try:
+        async for chunk_text in agent_service.stream_chat(
+            message=req.message,
+            thread_id=safe_thread_id,
+            context_text=context_text,
+            run_id=run_id,
+        ):
+            if chunk_text:
+
+                full_assistant_message += chunk_text
+                
+                yield f"data: {json.dumps({'content': chunk_text}, ensure_ascii=False)}\n\n"
+                
+    except Exception as e:
+        finish_agent_run(
+            db=db,
+            run_id=run_id,
+            output=full_assistant_message,
+            status="failed",
+        )
+        logger.warning(f"[Chat] agent stream failed: {e}")
+        raise
 
     save_message(
         db=db,
@@ -98,6 +123,13 @@ async def chat_with_agent(
         thread_id=req.thread_id,
         role="assistant",
         content=full_assistant_message
+    )
+
+    finish_agent_run(
+        db=db,
+        run_id=run_id,
+        output=full_assistant_message,
+        status="success",
     )
 
     if background_tasks is not None:

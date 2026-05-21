@@ -88,3 +88,53 @@ class ChatMessage(Base):
         nullable=False,
     )
 
+
+class ChatThreadSummary(Base):
+    __tablename__ = "chat_thread_summaries"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+        autoincrement=True,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        Integer,
+        index=True,
+        nullable=False,
+    )
+
+    thread_id: Mapped[str] = mapped_column(
+        String(128),
+        index=True,
+        nullable=False,
+    )
+
+    summary: Mapped[str] = mapped_column(
+        Text,
+        nullable=False,
+    )
+
+    last_compressed_message_id: Mapped[int] = mapped_column(
+        Integer,
+        default=0,
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.now,
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=datetime.now,
+        onupdate=datetime.now,
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "thread_id", name="uq_user_thread_summary"),
+    )
+

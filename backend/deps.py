@@ -6,6 +6,7 @@ from jwt.exceptions import InvalidTokenError
 from sqlalchemy.orm import Session
 
 from backend.core.security import decode_access_token
+from backend.core.config import settings
 from backend.db.database import get_db
 from backend.repositories.user_repository import get_user_by_id
 from backend.schemas.user import CurrentUser
@@ -53,4 +54,17 @@ async def get_current_user(
         username=user.username,
         nickname=user.nickname,
         disabled=user.disabled,
+        is_admin=user.username in settings.ADMIN_USERNAMES,
     )
+
+
+async def require_admin(
+    current_user: CurrentUser = Depends(get_current_user),
+) -> CurrentUser:
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin permission required",
+        )
+
+    return current_user

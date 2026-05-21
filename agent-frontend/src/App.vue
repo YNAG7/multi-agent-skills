@@ -2,12 +2,14 @@
 import { onMounted, ref } from 'vue'
 import LoginPage from './pages/LoginPage.vue'
 import ChatPage from './pages/ChatPage.vue'
+import MonitorPage from './pages/MonitorPage.vue'
 import { getMe, logout as doLogout } from './api/auth'
 import { getToken } from './api/http'
 import type { User } from './types/auth'
 
 const loading = ref(true)
 const user = ref<User | null>(null)
+const activePage = ref<'chat' | 'monitor'>('chat')
 
 async function loadUser() {
   if (!getToken()) {
@@ -32,6 +34,7 @@ async function handleLoginSuccess() {
 function handleLogout() {
   doLogout()
   user.value = null
+  activePage.value = 'chat'
 }
 
 onMounted(loadUser)
@@ -49,8 +52,16 @@ onMounted(loadUser)
   />
 
   <ChatPage
+    v-else-if="activePage === 'chat'"
+    :user="user"
+    @open-monitor="activePage = 'monitor'"
+    @logout="handleLogout"
+  />
+
+  <MonitorPage
     v-else
     :user="user"
+    @back="activePage = 'chat'"
     @logout="handleLogout"
   />
 </template>

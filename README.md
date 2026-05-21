@@ -1,16 +1,17 @@
 # Multi-Agent Skills
 
-一个基于 FastAPI、LangGraph、Skills 插件体系和 Vue 的多 Agent 对话平台。项目支持按 Skill 路由任务、动态导入 Skill 包、工具调用、会话管理、上下文压缩以及 mem0 长期记忆。
+基于 FastAPI、LangGraph、Skills 插件体系和 Vue 3 的多 Agent 对话平台。项目支持按 Skill 路由任务、并发 Worker 执行、工具调用、Skill 动态导入、会话管理、上下文压缩、mem0 长期记忆，以及管理员运行监控。
 
 ## 功能概览
 
-- 多 Agent 路由：根据用户问题选择合适的 Skill，并支持多个 Worker 并行处理后汇总。
+- 多 Agent 路由：Router 根据用户输入选择一个或多个 Skill，并分发给 Worker 执行。
 - Skill 管理：支持创建、上传 zip 导入、从 `skills/file` 目录导入、查看详情、启用/禁用、删除和运行时 reload。
-- 工具系统：Skill 可声明本地 Python 工具，也可扩展 MCP 工具。
-- 会话系统：支持会话列表、消息记录、删除会话。
-- 上下文管理：用户界面保留完整聊天记录，Agent 侧使用摘要、最近 N 轮和长期记忆构造压缩上下文。
+- 工具系统：Skill 可声明本地 Python 工具，也可扩展远端 MCP 工具。
+- 会话系统：支持会话列表、消息记录、删除会话和流式回复。
+- 上下文管理：前端保留完整聊天记录，Agent 侧使用最近 N 轮、会话摘要和 mem0 长期记忆构造压缩上下文。
 - 长期记忆：集成 mem0，本地使用 Qdrant 文件存储。
-- 前端界面：Vue 3 + Vite，包含聊天、会话侧边栏、Skill Library 和导入面板。
+- 运行监控：管理员可查看 run、router 分配、worker 输出、工具调用、最终输出和耗时。
+- 前端界面：Vue 3 + Vite，包含聊天页、Skill Library、Skill 导入面板和管理员监控页。
 
 ## 目录结构
 
@@ -19,8 +20,8 @@
 ├── agent/                  # LangGraph 多 Agent 编排
 │   └── graph/
 │       ├── builder.py       # 构建主图和 Worker 子图
-│       ├── nodes.py         # Worker 节点和汇总节点
-│       ├── router.py        # 路由节点
+│       ├── nodes.py         # Worker 节点和 Summarizer 节点
+│       ├── router.py        # Router 节点
 │       ├── select_router.py # Skill 选择逻辑
 │       └── state.py         # LangGraph 状态定义
 ├── agent-frontend/          # Vue 前端
@@ -44,7 +45,7 @@
 
 ## 运行环境
 
-后端使用 Python，前端使用 Node.js。当前项目没有固定的 `requirements.txt`，如果在新环境部署，需要根据项目导入安装依赖。
+后端使用 Python，前端使用 Node.js。当前仓库没有固定的 `requirements.txt`，如果在新环境部署，需要根据项目导入安装依赖。
 
 后端关键依赖包括：
 
@@ -65,7 +66,7 @@ python-multipart
 pyjwt
 ```
 
-前端依赖在 [agent-frontend/package.json](agent-frontend/package.json) 中维护。
+前端依赖维护在 [agent-frontend/package.json](agent-frontend/package.json)。
 
 ## 环境变量
 
@@ -88,9 +89,44 @@ $env:MEMORY_RECENT_TURNS = "6"
 $env:MEMORY_COMPRESS_THRESHOLD = "12"
 $env:MEMORY_TOP_K = "5"
 $env:MEM0_DIR = "datas/mem0"
+
+$env:ADMIN_USERNAMES = "admin"
 ```
 
-模型默认使用 DashScope 兼容 OpenAI API，配置见 [model/factory.py](model/factory.py) 和 [config/rag.yml](config/rag.yml)。
+mem0 默认使用 DashScope 兼容 OpenAI API：
+
+```powershell
+$env:MEM0_LLM_PROVIDER = "openai"
+$env:MEM0_LLM_MODEL = "qwen-turbo"
+$env:MEM0_LLM_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+$env:MEM0_LLM_API_KEY = $env:DASHSCOPE_API_KEY
+
+$env:MEM0_EMBEDDER_PROVIDER = "openai"
+$env:MEM0_EMBEDDER_MODEL = "text-embedding-v4"
+$env:MEM0_EMBEDDER_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+$env:MEM0_EMBEDDER_API_KEY = $env:DASHSCOPE_API_KEY
+$env:MEM0_COLLECTION_NAME = "mem0"
+$env:MEM0_EMBEDDING_DIMS = "1024"
+```
+
+监控落库策略：
+
+```powershell
+# 默认 false：只存关键节点，避免 prompt/messages 反复落库
+$env:MONITOR_STORE_RAW_EVENTS = "false"
+
+# 默认 false：不额外从 worker messages 中补抓 observed tool，避免工具调用重复
+$env:MONITOR_CAPTURE_OBSERVED_TOOLS = "false"
+```
+
+第三方遥测和 HuggingFace symlink 警告已在 [backend/services/mem0_service.py](backend/services/mem0_service.py) 中默认关闭：
+
+```text
+MEM0_TELEMETRY=False
+DISABLE_TELEMETRY=1
+HF_HUB_DISABLE_TELEMETRY=1
+HF_HUB_DISABLE_SYMLINKS_WARNING=1
+```
 
 ## 启动后端
 
@@ -125,6 +161,12 @@ GET http://localhost:8000/health
 cd agent-frontend
 npm install
 npm run dev
+```
+
+如果 PowerShell 拦截 `npm.ps1`，可改用：
+
+```powershell
+npm.cmd run dev
 ```
 
 默认前端地址：
@@ -197,7 +239,7 @@ Skill 导入支持：
 - 防止 zip slip 路径穿越
 - 防止覆盖已有 Skill
 - Python 工具文件位置合法
-- 工具加载失败时不会拖垮整个系统
+- 工具加载失败时不拖垮整个系统
 
 ## 上下文与记忆机制
 
@@ -220,7 +262,7 @@ mem0 长期记忆
 + 当前用户问题
 ```
 
-相关逻辑在：
+相关逻辑：
 
 - [backend/services/context_service.py](backend/services/context_service.py)
 - [backend/services/chat_service.py](backend/services/chat_service.py)
@@ -242,6 +284,50 @@ MEMORY_TOP_K = 5
 
 LangGraph checkpoint 仍按会话保存，但每次请求入口会清空旧 `messages`，再注入压缩后的上下文，避免完整历史无限进入模型上下文。
 
+## 运行监控
+
+管理员用户可以打开监控页查看运行链路。管理员由环境变量 `ADMIN_USERNAMES` 控制，默认包含 `admin`。
+
+监控数据表：
+
+```text
+agent_runs        # 一次用户请求的输入、输出、状态、耗时、主 skill
+agent_run_steps   # 关键执行节点
+agent_tool_calls  # 工具调用
+```
+
+默认只存关键节点：
+
+- Router 任务分配
+- Worker 开始
+- Worker 结束
+- Worker 异常
+- 工具调用单独进入 `agent_tool_calls`
+- Summarizer 输出直接使用 `agent_runs.output`
+
+这样可以避免把同一份 prompt、messages、model input/output 在每个 LangChain 原始事件中重复落库。需要排查底层事件时，可临时启用：
+
+```powershell
+$env:MONITOR_STORE_RAW_EVENTS = "true"
+```
+
+监控 API：
+
+```text
+GET /monitor/summary
+GET /monitor/runs
+GET /monitor/runs/{run_id}
+```
+
+返回详情里包含：
+
+```text
+run         # 本次请求摘要
+steps       # 关键节点
+tool_calls  # 工具调用
+trace       # 前端展示用执行链路
+```
+
 ## mem0 数据位置
 
 mem0 本地目录：
@@ -257,7 +343,7 @@ datas/mem0/qdrant      # 向量记忆库
 datas/mem0/history.db  # mem0 历史记录
 ```
 
-如果后端正在运行，本地 Qdrant 目录可能被占用。此时不要在另一个进程里再次打开同一个本地 Qdrant 存储。可以停掉后端后再用 mem0 API 查看，或者后续添加一个只读调试接口。
+如果后端正在运行，本地 Qdrant 目录可能被占用。不要在另一个进程里同时打开同一个本地 Qdrant 存储。需要多进程访问时，建议改成独立 Qdrant Server。
 
 ## 主要 API
 
@@ -293,19 +379,33 @@ PATCH  /skills/{skill_name}/enabled
 DELETE /skills/{skill_name}
 ```
 
+监控：
+
+```text
+GET /monitor/summary
+GET /monitor/runs
+GET /monitor/runs/{run_id}
+```
+
 ## 开发常用命令
 
 后端语法检查：
 
 ```powershell
-python -m py_compile backend\services\agent_service.py backend\services\chat_service.py agent\graph\state.py
+python -m compileall backend agent
+```
+
+也可以只检查单个文件：
+
+```powershell
+python -m compileall backend\services\agent_service.py backend\api\monitor_api.py
 ```
 
 前端构建：
 
 ```powershell
 cd agent-frontend
-npm run build
+npm.cmd run build
 ```
 
 查看 Git 状态：
@@ -322,7 +422,19 @@ git status --short
 
 ### mem0 报 Qdrant 目录被占用
 
-本地 Qdrant 文件存储不适合多进程同时打开。同一时间只让一个后端进程访问 `datas/mem0/qdrant`。如果要多进程访问，建议改成独立 Qdrant Server。
+本地 Qdrant 文件存储不适合多进程同时打开。同一时间只让一个后端进程访问 `datas/mem0/qdrant`。如果需要多进程访问，建议改成独立 Qdrant Server。
+
+### 启动时出现 PostHog SSL 上传错误
+
+这是 mem0 匿名遥测，不是业务请求。项目已默认设置 `MEM0_TELEMETRY=False` 关闭上传。重启后端后生效。
+
+### HuggingFace 提示 Windows 不支持 symlink
+
+这是缓存系统降级提示，不影响下载和运行。项目已默认设置 `HF_HUB_DISABLE_SYMLINKS_WARNING=1` 压掉警告。需要真正启用 symlink 可开启 Windows Developer Mode 或用管理员权限运行 Python。
+
+### Router 里显示重复的 base-assistant
+
+这是监控 trace 解析重复提取任务导致的显示问题，不代表真的执行了两个 Worker。`monitor_api.py` 已对 `(skill, sub_task)` 做去重。
 
 ### Agent 回复重复或混入上一轮结果
 
@@ -340,9 +452,9 @@ git status --short
 POST /skills/reload
 ```
 
-或者在前端 Skill Library 中点击刷新/重载。
+也可以在前端 Skill Library 中点击刷新/重载。
 
-## 数据文件说明
+## 运行时数据
 
 运行时会产生以下文件或目录：
 
@@ -351,6 +463,7 @@ datas/chat_multi_history.db   # LangGraph checkpoint
 datas/mem0/                   # mem0 本地记忆
 chroma_db/                    # Chroma/RAG 向量库
 logs/                         # 日志
+agent-frontend/dist/          # 前端构建产物
 ```
 
 这些文件属于运行时数据，不建议手动修改。需要重置时应先停止后端服务。

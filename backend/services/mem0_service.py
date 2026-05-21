@@ -9,6 +9,47 @@ from utils.logger_handler import logger
 from utils.path_tool import get_abs_path
 
 
+def _configure_third_party_runtime() -> None:
+    os.environ.setdefault("MEM0_TELEMETRY", "False")
+    os.environ.setdefault("DISABLE_TELEMETRY", "1")
+    os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
+    os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
+
+
+_configure_third_party_runtime()
+
+
+def build_mem0_config(mem0_dir: Path) -> dict:
+    return {
+        "llm": {
+            "provider": settings.MEM0_LLM_PROVIDER,
+            "config": {
+                "model": settings.MEM0_LLM_MODEL,
+                "api_key": settings.MEM0_LLM_API_KEY,
+                "openai_base_url": settings.MEM0_LLM_BASE_URL,
+                "temperature": 0.1,
+            },
+        },
+        "embedder": {
+            "provider": settings.MEM0_EMBEDDER_PROVIDER,
+            "config": {
+                "model": settings.MEM0_EMBEDDER_MODEL,
+                "api_key": settings.MEM0_EMBEDDER_API_KEY,
+                "openai_base_url": settings.MEM0_EMBEDDER_BASE_URL,
+            },
+        },
+        "vector_store": {
+            "provider": "qdrant",
+            "config": {
+                "path": str(mem0_dir / "qdrant"),
+                "collection_name": settings.MEM0_COLLECTION_NAME,
+                "embedding_model_dims": settings.MEM0_EMBEDDING_DIMS,
+            },
+        },
+        "history_db_path": str(mem0_dir / "history.db"),
+    }
+
+
 class Mem0Service:
     def __init__(self):
         self._memory = None
@@ -28,17 +69,7 @@ class Mem0Service:
         try:
             from mem0 import Memory
 
-            self._memory = Memory.from_config(
-                {
-                    "vector_store": {
-                        "provider": "qdrant",
-                        "config": {
-                            "path": str(mem0_dir / "qdrant"),
-                        },
-                    },
-                    "history_db_path": str(mem0_dir / "history.db"),
-                }
-            )
+            self._memory = Memory.from_config(build_mem0_config(mem0_dir))
             self._available = True
         except Exception as e:
             self._available = False

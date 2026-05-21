@@ -5,6 +5,7 @@ export interface User {
   username: string
   nickname?: string | null
   disabled?: boolean
+  is_admin?: boolean
 }
 
 export interface LoginResponse {
