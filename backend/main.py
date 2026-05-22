@@ -5,11 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.api.auth_api import router as auth_router
 from backend.api.chat_api import router as chat_router
+from backend.api.knowledge_api import router as knowledge_router
 from backend.api.monitor_api import router as monitor_router
 from backend.api.skill_api import router as skill_router
 from backend.api.user_api import router as user_router
 from backend.core.config import settings
 from backend.db.init_db import init_db
+from utils.logger_handler import logger
 
 # 新增：导入 agent_service
 from backend.services.agent_service import agent_service
@@ -44,6 +46,13 @@ async def on_startup():
        - 创建 ToolNode
     """
     init_db()
+
+    try:
+        from agent.tools.common_tools import initialize_rag
+
+        initialize_rag()
+    except Exception as e:
+        logger.error(f"[Startup] RAG warmup failed: {e}")
 
     await agent_service.init()
 
@@ -85,6 +94,12 @@ app.include_router(
     skill_router,
     prefix="/skills",
     tags=["Skill"],
+)
+
+app.include_router(
+    knowledge_router,
+    prefix="/knowledge",
+    tags=["Knowledge"],
 )
 
 app.include_router(

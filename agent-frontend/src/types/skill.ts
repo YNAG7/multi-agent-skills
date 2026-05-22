@@ -17,6 +17,12 @@ export interface SkillCreatePayload {
   description: string
   content: string
   needs_time_context: boolean
+  skill_json?: Record<string, any>
+}
+
+export interface SkillUpdatePayload {
+  skill_md: string
+  skill_json: Record<string, any>
 }
 
 export interface SkillDetail extends Skill {

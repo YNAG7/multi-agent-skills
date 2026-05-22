@@ -6,6 +6,7 @@ from agent.graph.nodes import worker_agent_node,summarizer_node
 from agent.graph.router import router_node
 from skills.registry import SKILL_REGISTRY, inject_mcp_tools_into_registry
 import aiosqlite
+import time
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 from utils.path_tool import get_abs_path
 from utils.logger_handler import logger
@@ -38,6 +39,160 @@ def _final_message_payload(messages):
             continue
         return _safe_message_payload(message)
     return None
+
+
+def _tool_call_parts(tool_call):
+    if isinstance(tool_call, dict):
+        return (
+            tool_call.get("id"),
+            tool_call.get("name"),
+            tool_call.get("args"),
+        )
+
+    return (
+        getattr(tool_call, "id", None),
+        getattr(tool_call, "name", None),
+        getattr(tool_call, "args", None),
+    )
+
+
+def _collect_pending_tool_calls(messages, last_tool_request_only: bool = False) -> dict[str, dict]:
+    pending_tool_calls: dict[str, dict] = {}
+    fallback_index = 0
+    source_messages = reversed(messages) if last_tool_request_only else messages
+
+    for message in source_messages:
+        tool_calls = getattr(message, "tool_calls", None) or []
+        if not tool_calls:
+            continue
+
+        for tool_call in tool_calls:
+            tool_id, tool_name, tool_args = _tool_call_parts(tool_call)
+            if not tool_name:
+                continue
+
+            fallback_index += 1
+            tool_key = str(tool_id or f"{tool_name}:{fallback_index}")
+            pending_tool_calls[tool_key] = {
+                "name": str(tool_name),
+                "args": tool_args,
+            }
+
+        if last_tool_request_only:
+            break
+
+    return pending_tool_calls
+
+
+def _record_tool_node_trace(
+    config,
+    skill_name: str,
+    state: dict | None,
+    result: dict | None = None,
+    error: Exception | None = None,
+    latency_ms: int | None = None,
+):
+    metadata = (config or {}).get("metadata") or {}
+    run_id = metadata.get("run_id")
+    if not run_id:
+        return
+
+    try:
+        from backend.db.database import SessionLocal
+        from backend.repositories.monitor_repository import (
+            create_tool_call,
+            finish_tool_call,
+            next_step_index,
+        )
+
+        input_messages = (state or {}).get("messages", [])
+        pending_tool_calls = _collect_pending_tool_calls(
+            input_messages,
+            last_tool_request_only=True,
+        )
+        if not pending_tool_calls:
+            return
+
+        db = SessionLocal()
+        try:
+            if error is not None:
+                for pending in pending_tool_calls.values():
+                    tool = create_tool_call(
+                        db=db,
+                        run_id=run_id,
+                        step_index=next_step_index(db, run_id),
+                        tool_name=str(pending.get("name") or "tool"),
+                        tool_input=pending.get("args"),
+                        status="running",
+                        skill=skill_name,
+                    )
+                    finish_tool_call(
+                        db=db,
+                        tool_call_id=tool.id,
+                        tool_output={"error": str(error)},
+                        status="failed",
+                        latency_ms=latency_ms,
+                    )
+                return
+
+            result_messages = (result or {}).get("messages", [])
+            for message in result_messages:
+                if message.__class__.__name__ != "ToolMessage":
+                    continue
+
+                tool_call_id = getattr(message, "tool_call_id", None)
+                pending = (
+                    pending_tool_calls.pop(str(tool_call_id), None)
+                    if tool_call_id
+                    else None
+                )
+                tool_name = (
+                    (pending or {}).get("name")
+                    or getattr(message, "name", None)
+                    or tool_call_id
+                    or "tool"
+                )
+
+                tool = create_tool_call(
+                    db=db,
+                    run_id=run_id,
+                    step_index=next_step_index(db, run_id),
+                    tool_name=str(tool_name),
+                    tool_input=(pending or {}).get("args"),
+                    status="running",
+                    skill=skill_name,
+                )
+                finish_tool_call(
+                    db=db,
+                    tool_call_id=tool.id,
+                    tool_output=_safe_message_payload(message),
+                    status="success",
+                    latency_ms=latency_ms,
+                )
+
+            for pending in pending_tool_calls.values():
+                tool_name = pending.get("name")
+                if not tool_name:
+                    continue
+
+                tool = create_tool_call(
+                    db=db,
+                    run_id=run_id,
+                    step_index=next_step_index(db, run_id),
+                    tool_name=str(tool_name),
+                    tool_input=pending.get("args"),
+                    status="observed",
+                    skill=skill_name,
+                )
+                finish_tool_call(
+                    db=db,
+                    tool_call_id=tool.id,
+                    status="observed",
+                )
+        finally:
+            db.close()
+    except Exception as trace_error:
+        logger.warning(f"[Monitor] tool node trace save failed: {trace_error}")
 
 
 def _record_worker_trace(config, skill_name: str, task_info: dict, result: dict | None = None, error: Exception | None = None):
@@ -85,49 +240,34 @@ def _record_worker_trace(config, skill_name: str, task_info: dict, result: dict 
 
             messages = (result or {}).get("messages", [])
             if settings.MONITOR_CAPTURE_OBSERVED_TOOLS:
+                pending_tool_calls = _collect_pending_tool_calls(messages)
                 for message in messages:
-                    tool_calls = getattr(message, "tool_calls", None) or []
-                    for tool_call in tool_calls:
-                        if isinstance(tool_call, dict):
-                            tool_name = tool_call.get("name")
-                            tool_args = tool_call.get("args")
-                        else:
-                            tool_name = getattr(tool_call, "name", None)
-                            tool_args = getattr(tool_call, "args", None)
+                    if message.__class__.__name__ != "ToolMessage":
+                        continue
 
-                        if not tool_name:
-                            continue
+                    tool_call_id = getattr(message, "tool_call_id", None)
+                    if tool_call_id:
+                        pending_tool_calls.pop(str(tool_call_id), None)
 
-                        tool = create_tool_call(
-                            db=db,
-                            run_id=run_id,
-                            step_index=next_step_index(db, run_id),
-                            tool_name=str(tool_name),
-                            tool_input=tool_args,
-                            status="observed",
-                            skill=skill_name,
-                        )
-                        finish_tool_call(
-                            db=db,
-                            tool_call_id=tool.id,
-                            status="observed",
-                        )
+                for pending in pending_tool_calls.values():
+                    tool_name = pending.get("name")
+                    if not tool_name:
+                        continue
 
-                    if message.__class__.__name__ == "ToolMessage":
-                        tool = create_tool_call(
-                            db=db,
-                            run_id=run_id,
-                            step_index=next_step_index(db, run_id),
-                            tool_name=str(getattr(message, "name", None) or getattr(message, "tool_call_id", "tool")),
-                            status="success",
-                            skill=skill_name,
-                        )
-                        finish_tool_call(
-                            db=db,
-                            tool_call_id=tool.id,
-                            tool_output=_safe_message_payload(message),
-                            status="success",
-                        )
+                    tool = create_tool_call(
+                        db=db,
+                        run_id=run_id,
+                        step_index=next_step_index(db, run_id),
+                        tool_name=str(tool_name),
+                        tool_input=pending.get("args"),
+                        status="observed",
+                        skill=skill_name,
+                    )
+                    finish_tool_call(
+                        db=db,
+                        tool_call_id=tool.id,
+                        status="observed",
+                    )
 
             create_agent_run_step(
                 db=db,
@@ -166,8 +306,35 @@ async def build_multi_agent_graph():
 
         skill_spec = SKILL_REGISTRY[skill_name]
         worker_builder = StateGraph(WorkerState)
+        tool_node = ToolNode(skill_spec.tools)
+
+        async def monitored_tool_node(state: WorkerState, config=None):
+            started_at = time.perf_counter()
+            try:
+                result = await tool_node.ainvoke(state, config=config)
+            except Exception as e:
+                latency_ms = int((time.perf_counter() - started_at) * 1000)
+                _record_tool_node_trace(
+                    config,
+                    skill_name,
+                    state,
+                    error=e,
+                    latency_ms=latency_ms,
+                )
+                raise
+
+            latency_ms = int((time.perf_counter() - started_at) * 1000)
+            _record_tool_node_trace(
+                config,
+                skill_name,
+                state,
+                result=result,
+                latency_ms=latency_ms,
+            )
+            return result
+
         worker_builder.add_node("agent", worker_agent_node)
-        worker_builder.add_node("tools", ToolNode(skill_spec.tools))
+        worker_builder.add_node("tools", monitored_tool_node)
 
         worker_builder.add_edge(START, "agent")
         worker_builder.add_conditional_edges(
@@ -190,10 +357,12 @@ async def build_multi_agent_graph():
         try:
             # 独立运行子图
             worker_graph = get_worker_graph(skill_name)
+            parent_config = config or {}
             subgraph_config = {
+                **parent_config,
                 "recursion_limit": 30,
                 "metadata": {
-                    **((config or {}).get("metadata") or {}),
+                    **(parent_config.get("metadata") or {}),
                     "skill": skill_name,
                     "task_info": state.get("task_info", {}),
                 },

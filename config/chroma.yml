@@ -2,11 +2,16 @@ collection_name : agent
 persist_directory : chroma_db
 k :  3
 data_path : data
-md5_hex_store : md5.txt
+upload_path : data/uploads
 allow_knowledge_file_type : ["txt","pdf"]
 
 chunk_size : 200
 chunk_overlap : 20
+parent_chunk_size : 1200
+parent_chunk_overlap : 120
+child_chunk_size : 360
+child_chunk_overlap : 80
+embedding_batch_size : 10
 separators : ["\n\n","。",".","?","？","!"," ",""]
 
 top_n: 2

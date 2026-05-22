@@ -244,6 +244,22 @@ def get_agent_run(
     return query.first()
 
 
+def delete_agent_run(db: Session, run_id: str) -> bool:
+    item = db.get(AgentRun, run_id)
+    if item is None:
+        return False
+
+    db.query(AgentToolCall).filter(AgentToolCall.run_id == run_id).delete(
+        synchronize_session=False
+    )
+    db.query(AgentRunStep).filter(AgentRunStep.run_id == run_id).delete(
+        synchronize_session=False
+    )
+    db.delete(item)
+    db.commit()
+    return True
+
+
 def list_agent_run_steps(db: Session, run_id: str) -> list[AgentRunStep]:
     return (
         db.query(AgentRunStep)

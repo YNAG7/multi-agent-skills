@@ -36,6 +36,7 @@ def build_mem0_config(mem0_dir: Path) -> dict:
                 "model": settings.MEM0_EMBEDDER_MODEL,
                 "api_key": settings.MEM0_EMBEDDER_API_KEY,
                 "openai_base_url": settings.MEM0_EMBEDDER_BASE_URL,
+                "embedding_dims": settings.MEM0_EMBEDDING_DIMS,
             },
         },
         "vector_store": {

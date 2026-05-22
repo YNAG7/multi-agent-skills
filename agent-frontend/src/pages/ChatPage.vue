@@ -9,6 +9,7 @@ import {
   Check,
   CircleSlash2,
   Copy,
+  Database,
   FolderOpen,
   Loader2,
   LogOut,
@@ -59,7 +60,9 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'logout'): void
+  (e: 'open-skills'): void
   (e: 'open-monitor'): void
+  (e: 'open-knowledge'): void
 }>()
 
 const md = new MarkdownIt({
@@ -350,10 +353,11 @@ async function refreshAllSkills() {
 }
 
 function openSkillPanel() {
-  skillPanelOpen.value = true
-  skillError.value = ''
-  importError.value = ''
-  loadSkills()
+  emit('open-skills')
+}
+
+function openKnowledgePanel() {
+  emit('open-knowledge')
 }
 
 function closeSkillPanel() {
@@ -1303,6 +1307,11 @@ onMounted(async () => {
           <button class="nx-topbar-btn" type="button" @click="openSkillPanel">
             <BrainCircuit :size="18" />
             <span>Skills</span>
+          </button>
+
+          <button v-if="isAdmin" class="nx-topbar-btn" type="button" @click="openKnowledgePanel">
+            <Database :size="18" />
+            <span>知识库</span>
           </button>
 
           <button v-if="isAdmin" class="nx-topbar-btn" type="button" @click="openMonitorPanel">

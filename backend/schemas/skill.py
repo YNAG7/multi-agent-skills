@@ -8,6 +8,12 @@ class SkillCreate(BaseModel):
     description: str = Field(..., min_length=1, max_length=500)
     content: str = Field(..., min_length=1)
     needs_time_context: bool = False
+    skill_json: dict[str, Any] | None = None
+
+
+class SkillUpdate(BaseModel):
+    skill_md: str = Field(..., min_length=1)
+    skill_json: dict[str, Any] = Field(default_factory=dict)
 
 
 class SkillOut(BaseModel):

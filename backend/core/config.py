@@ -39,7 +39,7 @@ class Settings:
 
     # Monitor
     MONITOR_STORE_RAW_EVENTS: bool = os.getenv("MONITOR_STORE_RAW_EVENTS", "false").lower() == "true"
-    MONITOR_CAPTURE_OBSERVED_TOOLS: bool = os.getenv("MONITOR_CAPTURE_OBSERVED_TOOLS", "false").lower() == "true"
+    MONITOR_CAPTURE_OBSERVED_TOOLS: bool = os.getenv("MONITOR_CAPTURE_OBSERVED_TOOLS", "true").lower() == "true"
 
     # CORS
     CORS_ORIGINS: list[str] = [

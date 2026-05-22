@@ -2,14 +2,16 @@
 import { onMounted, ref } from 'vue'
 import LoginPage from './pages/LoginPage.vue'
 import ChatPage from './pages/ChatPage.vue'
+import KnowledgePage from './pages/KnowledgePage.vue'
 import MonitorPage from './pages/MonitorPage.vue'
+import SkillPage from './pages/SkillPage.vue'
 import { getMe, logout as doLogout } from './api/auth'
 import { getToken } from './api/http'
 import type { User } from './types/auth'
 
 const loading = ref(true)
 const user = ref<User | null>(null)
-const activePage = ref<'chat' | 'monitor'>('chat')
+const activePage = ref<'chat' | 'monitor' | 'skills' | 'knowledge'>('chat')
 
 async function loadUser() {
   if (!getToken()) {
@@ -54,11 +56,27 @@ onMounted(loadUser)
   <ChatPage
     v-else-if="activePage === 'chat'"
     :user="user"
+    @open-skills="activePage = 'skills'"
     @open-monitor="activePage = 'monitor'"
+    @open-knowledge="activePage = 'knowledge'"
     @logout="handleLogout"
   />
 
   <MonitorPage
+    v-else-if="activePage === 'monitor'"
+    :user="user"
+    @back="activePage = 'chat'"
+    @logout="handleLogout"
+  />
+
+  <SkillPage
+    v-else-if="activePage === 'skills'"
+    :user="user"
+    @back="activePage = 'chat'"
+    @logout="handleLogout"
+  />
+
+  <KnowledgePage
     v-else
     :user="user"
     @back="activePage = 'chat'"

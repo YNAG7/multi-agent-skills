@@ -1,78 +1,144 @@
 # Multi-Agent Skills
 
-基于 FastAPI、LangGraph、Skills 插件体系和 Vue 3 的多 Agent 对话平台。项目支持按 Skill 路由任务、并发 Worker 执行、工具调用、Skill 动态导入、会话管理、上下文压缩、mem0 长期记忆，以及管理员运行监控。
+一个基于 **FastAPI + LangGraph + Vue 3** 的多 Agent 对话平台。项目的核心目标是：
+
+- 用 Skill 体系管理不同能力模块。
+- 用 Router 自动选择合适 Skill，并由 Worker 执行。
+- 支持管理员查看运行监控、管理知识库、上传文档、重建索引和做 RAGAS 测评。
+- 支持 mem0 长期记忆、会话摘要、RAG 检索增强和在线 Skill 编辑。
+
+当前项目更像一个“可管理的 Agent 工作台”，不是单纯聊天 Demo。
 
 ## 功能概览
 
-- 多 Agent 路由：Router 根据用户输入选择一个或多个 Skill，并分发给 Worker 执行。
-- Skill 管理：支持创建、上传 zip 导入、从 `skills/file` 目录导入、查看详情、启用/禁用、删除和运行时 reload。
-- 工具系统：Skill 可声明本地 Python 工具，也可扩展远端 MCP 工具。
-- 会话系统：支持会话列表、消息记录、删除会话和流式回复。
-- 上下文管理：前端保留完整聊天记录，Agent 侧使用最近 N 轮、会话摘要和 mem0 长期记忆构造压缩上下文。
-- 长期记忆：集成 mem0，本地使用 Qdrant 文件存储。
-- 运行监控：管理员可查看 run、router 分配、worker 输出、工具调用、最终输出和耗时。
-- 前端界面：Vue 3 + Vite，包含聊天页、Skill Library、Skill 导入面板和管理员监控页。
+### 对话与 Agent 编排
+
+- LangGraph 构建多 Agent 执行图。
+- Router 根据用户问题选择一个或多个 Skill。
+- Worker 根据 Skill 描述、工具和上下文生成结果。
+- 支持流式输出。
+- 支持会话列表、历史消息、删除会话。
+- Agent 输入上下文经过压缩，不会把完整历史无限塞进模型。
+
+### Skill 管理
+
+- 独立 Skill 页面。
+- 只展示已添加 Skill。
+- 新增 Skill 必须点击新增按钮，并在弹窗中完成。
+- 新增支持 zip 上传和在线输入切换。
+- `SKILL.md` 支持在线输入。
+- `skill.json` 支持在线输入，并提供常用字段。
+- 已添加 Skill 支持在线修改、启用/禁用、删除、重新加载。
+
+### 知识库与 RAG
+
+- 管理员可见知识库页面。
+- 支持前端上传 `txt/pdf` 到 RAG。
+- 支持同步 `data/` 目录。
+- 支持文档列表、详情、重建索引、删除。
+- 文档元数据写入 PostgreSQL。
+- 向量索引使用 Chroma。
+- 文档变更使用 `path + mtime + size` 预检查，变更后再计算 SHA-256。
+- 支持父子切块：子块用于向量检索，召回后扩展为父块上下文。
+- TXT/PDF 有统一解析和清洗流程。
+- RAG 服务在后端启动时预热，降低第一次调用延迟。
+
+### RAGAS 测评
+
+- 管理员可在知识库页面点击 `RAG 测评` 按钮打开测评弹窗。
+- 测评输入为 JSONL，每行一个 JSON。
+- 当前支持字段：`question` 和 `reference`。
+- 一次最多 20 条。
+- 输出指标包含：
+  - `faithfulness`
+  - `answer_relevancy`
+  - `context_precision`
+  - `context_recall`
+- 每条样本可点击查看召回上下文片段。
+- 也支持命令行脚本测评。
+
+### 监控
+
+- 管理员可见监控页面。
+- 查看 Agent run、router 分配、worker 输出、工具调用、最终输出和耗时。
+- 支持删除监控记录。
+- 默认只存关键节点，避免大量 prompt/messages 重复落库。
+
+### 记忆
+
+- 集成 mem0 长期记忆。
+- 本地默认使用 Qdrant 文件存储。
+- 支持最近 N 轮原文 + 会话摘要 + 长期记忆组合上下文。
+
+## 技术栈
+
+后端：
+
+- FastAPI
+- SQLAlchemy
+- PostgreSQL
+- LangChain
+- LangGraph
+- Chroma
+- mem0
+- DashScope / OpenAI Compatible API
+- RAGAS
+
+前端：
+
+- Vue 3
+- Vite
+- TypeScript
+- lucide-vue-next
+- markdown-it
+- DOMPurify
 
 ## 目录结构
 
 ```text
 .
-├── agent/                  # LangGraph 多 Agent 编排
-│   └── graph/
-│       ├── builder.py       # 构建主图和 Worker 子图
-│       ├── nodes.py         # Worker 节点和 Summarizer 节点
-│       ├── router.py        # Router 节点
-│       ├── select_router.py # Skill 选择逻辑
-│       └── state.py         # LangGraph 状态定义
-├── agent-frontend/          # Vue 前端
-├── backend/                 # FastAPI 后端
-│   ├── api/                 # HTTP API
-│   ├── core/                # 配置和安全
-│   ├── db/                  # 数据库连接和初始化
-│   ├── models/              # SQLAlchemy 模型
-│   ├── repositories/        # 数据访问层
-│   ├── schemas/             # 请求/响应模型
-│   └── services/            # 业务服务
-├── config/                  # RAG、模型等配置
-├── data/                    # 本地知识库数据
-├── datas/                   # 运行时数据，如 checkpoint、mem0
-├── model/                   # 模型工厂
-├── rag/                     # RAG 相关逻辑
-├── skills/                  # Skill 注册、加载和工具注入
-│   └── file/                # Skill 文件夹
-└── run_api.py               # 后端启动入口
+├── agent/                    # LangGraph Agent 编排
+│   ├── graph/                # Router、Worker、状态和图构建
+│   └── tools/                # Agent 公共工具
+├── agent-frontend/           # Vue 3 前端
+│   └── src/
+│       ├── api/              # 前端 API 封装
+│       ├── pages/            # Chat、Skill、Monitor、Knowledge 页面
+│       └── types/            # 前端类型
+├── backend/                  # FastAPI 后端
+│   ├── api/                  # HTTP API
+│   ├── core/                 # 配置、安全
+│   ├── db/                   # 数据库连接和初始化
+│   ├── models/               # SQLAlchemy 模型
+│   ├── repositories/         # 数据访问层
+│   ├── schemas/              # 请求/响应模型
+│   └── services/             # 业务服务
+├── config/                   # 模型、RAG、Chroma、Prompt 配置
+├── data/                     # 本地知识库目录
+│   └── uploads/              # 前端上传的知识库文件
+├── datas/                    # 运行时数据，如 mem0、checkpoint
+├── eval/                     # RAGAS 测试集和结果
+├── model/                    # 模型工厂
+├── rag/                      # RAG 解析、切块、索引、检索
+├── scripts/                  # 命令行脚本
+├── skills/                   # Skill 注册与文件目录
+│   └── file/                 # 本地 Skill
+└── run_api.py                # 后端启动入口
 ```
 
-## 运行环境
+## 快速启动
 
-后端使用 Python，前端使用 Node.js。当前仓库没有固定的 `requirements.txt`，如果在新环境部署，需要根据项目导入安装依赖。
+### 1. 准备数据库
 
-后端关键依赖包括：
+项目使用 PostgreSQL。先确认 PostgreSQL 已启动，并创建数据库，例如：
 
-```text
-fastapi
-uvicorn
-sqlalchemy
-psycopg2
-langchain
-langchain-core
-langchain-openai
-langchain-community
-langgraph
-aiosqlite
-mem0ai
-qdrant-client
-python-multipart
-pyjwt
+```sql
+CREATE DATABASE agent;
 ```
 
-前端依赖维护在 [agent-frontend/package.json](agent-frontend/package.json)。
+### 2. 配置环境变量
 
-## 环境变量
-
-后端配置位于 [backend/core/config.py](backend/core/config.py)。
-
-常用环境变量：
+PowerShell 示例：
 
 ```powershell
 $env:POSTGRES_USER = "postgres"
@@ -84,59 +150,18 @@ $env:POSTGRES_DB = "agent"
 $env:JWT_SECRET_KEY = "your-secret"
 $env:DASHSCOPE_API_KEY = "your-dashscope-api-key"
 
-$env:MEMORY_ENABLED = "true"
-$env:MEMORY_RECENT_TURNS = "6"
-$env:MEMORY_COMPRESS_THRESHOLD = "12"
-$env:MEMORY_TOP_K = "5"
-$env:MEM0_DIR = "datas/mem0"
-
 $env:ADMIN_USERNAMES = "admin"
 ```
 
-mem0 默认使用 DashScope 兼容 OpenAI API：
+`ADMIN_USERNAMES` 控制管理员账号，只有管理员能看到知识库和监控页面。
 
-```powershell
-$env:MEM0_LLM_PROVIDER = "openai"
-$env:MEM0_LLM_MODEL = "qwen-turbo"
-$env:MEM0_LLM_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-$env:MEM0_LLM_API_KEY = $env:DASHSCOPE_API_KEY
-
-$env:MEM0_EMBEDDER_PROVIDER = "openai"
-$env:MEM0_EMBEDDER_MODEL = "text-embedding-v4"
-$env:MEM0_EMBEDDER_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-$env:MEM0_EMBEDDER_API_KEY = $env:DASHSCOPE_API_KEY
-$env:MEM0_COLLECTION_NAME = "mem0"
-$env:MEM0_EMBEDDING_DIMS = "1024"
-```
-
-监控落库策略：
-
-```powershell
-# 默认 false：只存关键节点，避免 prompt/messages 反复落库
-$env:MONITOR_STORE_RAW_EVENTS = "false"
-
-# 默认 false：不额外从 worker messages 中补抓 observed tool，避免工具调用重复
-$env:MONITOR_CAPTURE_OBSERVED_TOOLS = "false"
-```
-
-第三方遥测和 HuggingFace symlink 警告已在 [backend/services/mem0_service.py](backend/services/mem0_service.py) 中默认关闭：
-
-```text
-MEM0_TELEMETRY=False
-DISABLE_TELEMETRY=1
-HF_HUB_DISABLE_TELEMETRY=1
-HF_HUB_DISABLE_SYMLINKS_WARNING=1
-```
-
-## 启动后端
-
-确认 PostgreSQL 可用，并已创建目标数据库，例如 `agent`。
+### 3. 启动后端
 
 ```powershell
 python run_api.py
 ```
 
-默认后端地址：
+默认地址：
 
 ```text
 http://localhost:8000
@@ -148,40 +173,257 @@ http://localhost:8000
 GET http://localhost:8000/health
 ```
 
-启动时会自动执行：
+后端启动时会自动：
 
-- 初始化数据库表
-- 加载 Skill Registry
-- 注入 MCP tools
-- 构建 LangGraph 多 Agent 图
+- 初始化数据库表。
+- 补齐部分历史表字段。
+- 预热 RAG 服务。
+- 加载 Skill。
+- 初始化 LangGraph Agent。
 
-## 启动前端
+### 4. 启动前端
 
 ```powershell
 cd agent-frontend
 npm install
-npm run dev
-```
-
-如果 PowerShell 拦截 `npm.ps1`，可改用：
-
-```powershell
 npm.cmd run dev
 ```
 
-默认前端地址：
+默认地址：
 
 ```text
 http://localhost:5173
 ```
 
-前端 API 地址配置在 [agent-frontend/src/api/http.ts](agent-frontend/src/api/http.ts)：
+前端 API 地址在：
 
-```ts
-export const API_BASE_URL = 'http://localhost:8000'
+```text
+agent-frontend/src/api/http.ts
 ```
 
-## Skill 说明
+默认指向：
+
+```text
+http://localhost:8000
+```
+
+## 关键配置
+
+### 后端配置
+
+主要配置在：
+
+```text
+backend/core/config.py
+```
+
+常用环境变量：
+
+```powershell
+$env:MEMORY_ENABLED = "true"
+$env:MEMORY_RECENT_TURNS = "6"
+$env:MEMORY_COMPRESS_THRESHOLD = "12"
+$env:MEMORY_TOP_K = "5"
+$env:MEM0_DIR = "datas/mem0"
+
+$env:MONITOR_STORE_RAW_EVENTS = "false"
+$env:MONITOR_CAPTURE_OBSERVED_TOOLS = "true"
+```
+
+### 模型配置
+
+模型名称在：
+
+```text
+config/rag.yml
+```
+
+当前默认：
+
+```yaml
+smart_chat_model_name: qwen3-max
+cheap_chat_model_name: qwen-turbo
+embedding_model_name: text-embedding-v4
+reranker_model_name: BAAI/bge-reranker-v2-m3
+```
+
+聊天模型通过 DashScope OpenAI Compatible API 调用：
+
+```text
+https://dashscope.aliyuncs.com/compatible-mode/v1
+```
+
+如果本机没有开代理也能正常访问阿里云模型，这是正常的。项目里的聊天模型客户端已设置 `trust_env=False`，会避开系统代理环境变量，减少 `127.0.0.1:xxxx` 代理端口拒绝连接的问题。
+
+### RAG 配置
+
+RAG 和 Chroma 配置在：
+
+```text
+config/chroma.yml
+```
+
+当前关键配置：
+
+```yaml
+collection_name: agent
+persist_directory: chroma_db
+k: 3
+top_n: 2
+data_path: data
+upload_path: data/uploads
+allow_knowledge_file_type: ["txt", "pdf"]
+
+parent_chunk_size: 1200
+parent_chunk_overlap: 120
+child_chunk_size: 360
+child_chunk_overlap: 80
+```
+
+含义：
+
+- `data_path`：本地知识库目录。
+- `upload_path`：前端上传文件保存目录。
+- `k`：向量初始召回数量。
+- `top_n`：rerank 后最终保留数量。
+- `parent_chunk_*`：父块大小，用于返回给模型。
+- `child_chunk_*`：子块大小，用于向量检索。
+
+## RAG 索引机制
+
+当前 RAG 流程：
+
+1. 扫描 `data/` 和上传文件。
+2. 用 `path + mtime + size` 判断文件是否可能变化。
+3. 文件变化后计算 SHA-256。
+4. 解析文档内容。
+5. 清洗文本。
+6. 父子切块。
+7. 子块写入 Chroma 向量库。
+8. 文档、父块、子块元数据写入 PostgreSQL。
+9. 检索时先召回子块，再扩展到父块作为回答上下文。
+
+为什么不用 MD5：
+
+- 当前文档内容哈希使用 SHA-256。
+- MD5 不是不能用来做普通去重，但已经不适合作为长期内容指纹的首选。
+- Milvus/Chroma 负责向量检索，不负责判断文件是否变化；文件变化判断仍应由数据库元数据和内容哈希完成。
+
+## 文档解析与清洗
+
+解析逻辑在：
+
+```text
+rag/document_parser.py
+```
+
+当前支持：
+
+- TXT：编码探测、文本归一化。
+- PDF：优先使用 PyMuPDF，必要时可扩展其他解析器。
+- 清洗：压缩空白、合并断行、去除短噪声、保留页码 metadata。
+
+切块逻辑在：
+
+```text
+rag/chunker.py
+```
+
+当前使用父子切块：
+
+- 子块更短，适合向量召回。
+- 父块更完整，适合给模型回答。
+- `chunk_hash` 基于清洗后的 chunk 文本。
+
+## 知识库页面
+
+知识库页面仅管理员可见。
+
+支持功能：
+
+- 上传 `txt/pdf`。
+- 同步 `data/`。
+- 查看文档状态、大小、chunk 数、SHA-256、索引时间。
+- 重建单个文档索引。
+- 删除文档、chunk 和向量记录。
+- 打开 RAGAS 测评弹窗。
+- 点击测评样本里的召回上下文，查看具体片段。
+
+相关 API：
+
+```text
+GET    /knowledge
+POST   /knowledge/upload
+POST   /knowledge/sync
+POST   /knowledge/evaluate
+POST   /knowledge/{document_id}/reindex
+DELETE /knowledge/{document_id}
+```
+
+## RAGAS 测评
+
+### 前端测评
+
+管理员进入知识库页面，点击右上角：
+
+```text
+RAG 测评
+```
+
+输入 JSONL：
+
+```json
+{"question":"机器人无法连接 WiFi 时应该检查什么？","reference":"应确认手机和机器人连接同一 2.4G 网络，检查 WiFi 密码、WiFi 模块遮挡情况，重启路由器和机器人后重新绑定。"}
+{"question":"拖地不出水时怎么办？","reference":"应检查水箱是否有水、出水量是否调至最低、出水管是否堵塞；加水、调高出水量，并疏通出水管。"}
+```
+
+字段说明：
+
+- `question`：评测问题。
+- `reference`：标准答案。
+
+当前一次最多 20 条。
+
+示例测试集：
+
+```text
+eval/rag_robot_eval.jsonl
+```
+
+### 命令行测评
+
+脚本：
+
+```text
+scripts/evaluate_rag.py
+```
+
+运行：
+
+```powershell
+python scripts/evaluate_rag.py --input eval/rag_robot_eval.jsonl --sync
+```
+
+只收集样本，不跑 RAGAS 指标：
+
+```powershell
+python scripts/evaluate_rag.py --input eval/rag_robot_eval.jsonl --collect-only
+```
+
+输出默认保存到：
+
+```text
+eval/results/
+```
+
+指标解释：
+
+- `faithfulness`：回答是否忠实于召回上下文。
+- `answer_relevancy`：回答是否贴合问题。
+- `context_precision`：召回上下文中有用片段比例。
+- `context_recall`：标准答案需要的信息是否被召回。
+
+## Skill 体系
 
 Skill 存放在：
 
@@ -195,17 +437,10 @@ skills/file/<skill_name>/
 SKILL.md
 ```
 
-可选文件：
-
-```text
-skill.json
-scripts/tools.py
-```
-
 推荐结构：
 
 ```text
-skills/file/product_support/
+skills/file/customer_service/
 ├── SKILL.md
 ├── skill.json
 └── scripts/
@@ -216,8 +451,8 @@ skills/file/product_support/
 
 ```json
 {
-  "name": "product-support",
-  "description": "处理产品咨询、故障排查和使用建议。",
+  "name": "customer-service",
+  "description": "处理售后咨询、投诉处理和服务流程说明。",
   "enabled": true,
   "can_be_main": true,
   "needs_time_context": false,
@@ -226,47 +461,57 @@ skills/file/product_support/
 }
 ```
 
-Skill 导入支持：
+常用字段：
 
-- 上传 `.zip` 包
-- 从 `skills/file` 下已有目录导入
-- 通过 Prompt 创建简单 Skill
+- `name`：Skill 名称。
+- `description`：用于 Router 判断是否应该选择该 Skill。
+- `enabled`：是否启用。
+- `can_be_main`：是否可以作为主 Skill。
+- `needs_time_context`：是否需要时间上下文。
+- `mcp_servers`：远端 MCP 服务配置。
+- `mcp_tool_allowlist`：允许使用的 MCP 工具。
 
-导入 zip 时会校验：
+Skill API：
 
-- 必须包含 `SKILL.md`
-- Skill 名称合法
-- 防止 zip slip 路径穿越
-- 防止覆盖已有 Skill
-- Python 工具文件位置合法
-- 工具加载失败时不拖垮整个系统
+```text
+GET    /skills
+POST   /skills
+PATCH  /skills/{skill_name}
+PATCH  /skills/{skill_name}/enabled
+DELETE /skills/{skill_name}
 
-## 上下文与记忆机制
+POST   /skills/import/zip
+POST   /skills/import/zip/preview
+POST   /skills/import/directory
+POST   /skills/reload
+GET    /skills/tools
+GET    /skills/{skill_name}
+```
 
-项目把“用户看到的聊天记录”和“Agent 看到的上下文”分开处理。
+## 会话、上下文和记忆
 
-用户看到：
+用户看到的完整聊天历史存放在：
 
 ```text
 chat_messages
 ```
 
-这里保留完整原始聊天记录，前端聊天窗口读取这里。
-
-Agent 看到：
+Agent 实际看到的上下文由几部分组成：
 
 ```text
 mem0 长期记忆
-+ chat_thread_summaries 当前会话摘要
-+ chat_messages 最近 N 轮原文
++ 当前会话摘要
++ 最近 N 轮原文
 + 当前用户问题
 ```
 
-相关逻辑：
+相关服务：
 
-- [backend/services/context_service.py](backend/services/context_service.py)
-- [backend/services/chat_service.py](backend/services/chat_service.py)
-- [backend/services/mem0_service.py](backend/services/mem0_service.py)
+```text
+backend/services/context_service.py
+backend/services/chat_service.py
+backend/services/mem0_service.py
+```
 
 默认策略：
 
@@ -278,34 +523,32 @@ MEMORY_TOP_K = 5
 
 含义：
 
-- Agent 保留最近 6 轮完整对话
-- 超过 12 轮后压缩旧历史到 `chat_thread_summaries`
-- 每次检索最多取 5 条 mem0 长期记忆
+- 最近 6 轮保留原文。
+- 超过 12 轮开始摘要旧历史。
+- 每次最多取 5 条 mem0 长期记忆。
 
-LangGraph checkpoint 仍按会话保存，但每次请求入口会清空旧 `messages`，再注入压缩后的上下文，避免完整历史无限进入模型上下文。
+## 监控页面
 
-## 运行监控
+监控页面仅管理员可见。
 
-管理员用户可以打开监控页查看运行链路。管理员由环境变量 `ADMIN_USERNAMES` 控制，默认包含 `admin`。
-
-监控数据表：
+监控表：
 
 ```text
-agent_runs        # 一次用户请求的输入、输出、状态、耗时、主 skill
-agent_run_steps   # 关键执行节点
-agent_tool_calls  # 工具调用
+agent_runs
+agent_run_steps
+agent_tool_calls
 ```
 
-默认只存关键节点：
+默认只记录关键事件：
 
-- Router 任务分配
-- Worker 开始
-- Worker 结束
-- Worker 异常
-- 工具调用单独进入 `agent_tool_calls`
-- Summarizer 输出直接使用 `agent_runs.output`
+- Router 分配。
+- Worker 开始。
+- Worker 完成。
+- Worker 异常。
+- 工具调用。
+- 最终输出。
 
-这样可以避免把同一份 prompt、messages、model input/output 在每个 LangChain 原始事件中重复落库。需要排查底层事件时，可临时启用：
+如果需要保存底层原始事件，可以临时开启：
 
 ```powershell
 $env:MONITOR_STORE_RAW_EVENTS = "true"
@@ -314,98 +557,31 @@ $env:MONITOR_STORE_RAW_EVENTS = "true"
 监控 API：
 
 ```text
-GET /monitor/summary
-GET /monitor/runs
-GET /monitor/runs/{run_id}
+GET    /monitor/summary
+GET    /monitor/runs
+GET    /monitor/runs/{run_id}
+DELETE /monitor/runs/{run_id}
 ```
 
-返回详情里包含：
-
-```text
-run         # 本次请求摘要
-steps       # 关键节点
-tool_calls  # 工具调用
-trace       # 前端展示用执行链路
-```
-
-## mem0 数据位置
-
-mem0 本地目录：
-
-```text
-datas/mem0
-```
-
-主要内容：
-
-```text
-datas/mem0/qdrant      # 向量记忆库
-datas/mem0/history.db  # mem0 历史记录
-```
-
-如果后端正在运行，本地 Qdrant 目录可能被占用。不要在另一个进程里同时打开同一个本地 Qdrant 存储。需要多进程访问时，建议改成独立 Qdrant Server。
-
-## 主要 API
-
-认证：
-
-```text
-POST /auth/register
-POST /auth/login
-GET  /users/me
-```
-
-聊天：
-
-```text
-POST   /chat
-GET    /chat/sessions
-GET    /chat/sessions/{thread_id}/messages
-DELETE /chat/sessions/{thread_id}
-```
-
-Skill：
-
-```text
-GET    /skills
-POST   /skills
-POST   /skills/import/zip
-POST   /skills/import/zip/preview
-POST   /skills/import/directory
-POST   /skills/reload
-GET    /skills/tools
-GET    /skills/{skill_name}
-PATCH  /skills/{skill_name}/enabled
-DELETE /skills/{skill_name}
-```
-
-监控：
-
-```text
-GET /monitor/summary
-GET /monitor/runs
-GET /monitor/runs/{run_id}
-```
-
-## 开发常用命令
-
-后端语法检查：
-
-```powershell
-python -m compileall backend agent
-```
-
-也可以只检查单个文件：
-
-```powershell
-python -m compileall backend\services\agent_service.py backend\api\monitor_api.py
-```
+## 常用命令
 
 前端构建：
 
 ```powershell
 cd agent-frontend
 npm.cmd run build
+```
+
+后端语法检查：
+
+```powershell
+python -m compileall backend agent rag scripts
+```
+
+RAGAS 测评：
+
+```powershell
+python scripts/evaluate_rag.py --input eval/rag_robot_eval.jsonl --sync
 ```
 
 查看 Git 状态：
@@ -416,33 +592,101 @@ git status --short
 
 ## 常见问题
 
-### 后端启动时报数据库连接失败
+### DashScope 模型连不上
 
-检查 PostgreSQL 是否启动，数据库名、账号、密码是否和环境变量一致。
+如果报错里出现：
 
-### mem0 报 Qdrant 目录被占用
+```text
+WinError 10061
+```
 
-本地 Qdrant 文件存储不适合多进程同时打开。同一时间只让一个后端进程访问 `datas/mem0/qdrant`。如果需要多进程访问，建议改成独立 Qdrant Server。
+通常是程序走了本地代理端口，但代理没有启动，导致连接被拒绝。
 
-### 启动时出现 PostHog SSL 上传错误
+处理建议：
 
-这是 mem0 匿名遥测，不是业务请求。项目已默认设置 `MEM0_TELEMETRY=False` 关闭上传。重启后端后生效。
+- 检查环境变量 `HTTP_PROXY`、`HTTPS_PROXY`、`ALL_PROXY`。
+- 确认代理软件是否启动。
+- 对国内 DashScope 地址，优先不要强制走本地代理。
+- 聊天模型客户端已设置 `trust_env=False`，但某些第三方 embedding/SDK 仍可能读取代理环境。
 
-### HuggingFace 提示 Windows 不支持 symlink
+### HuggingFace 模型或 reranker 加载慢
 
-这是缓存系统降级提示，不影响下载和运行。项目已默认设置 `HF_HUB_DISABLE_SYMLINKS_WARNING=1` 压掉警告。需要真正启用 symlink 可开启 Windows Developer Mode 或用管理员权限运行 Python。
+Reranker 默认配置：
 
-### Router 里显示重复的 base-assistant
+```text
+BAAI/bge-reranker-v2-m3
+```
 
-这是监控 trace 解析重复提取任务导致的显示问题，不代表真的执行了两个 Worker。`monitor_api.py` 已对 `(skill, sub_task)` 做去重。
+建议提前下载本地 snapshot，并在代码中使用本地路径和 `local_files_only=True`，避免服务启动时联网访问 HuggingFace。
 
-### Agent 回复重复或混入上一轮结果
+### RAG 第一次调用慢
 
-确认 [backend/services/agent_service.py](backend/services/agent_service.py) 中请求入口会清空旧 `messages`，并且 [agent/graph/state.py](agent/graph/state.py) 中 `agent_results` 使用了支持 reset 的 reducer。
+后端启动时会调用 RAG 初始化。若仍然慢，通常是：
 
-### 前端请求 401
+- 模型首次加载。
+- reranker 首次加载。
+- embedding SDK 首次建立连接。
+- 向量库首次打开。
 
-登录态保存在 `localStorage.access_token`。重新登录或清理浏览器 localStorage。
+可以通过本地缓存模型、减少 rerank、降低 top_k 或预热查询来优化。
+
+### mem0 维度不一致
+
+mem0 的 embedding 维度由模型决定。当前默认：
+
+```text
+text-embedding-v4
+MEM0_EMBEDDING_DIMS = 1024
+```
+
+如果换了 embedding 模型，但复用了旧 Qdrant collection，就可能出现维度不一致。
+
+处理方式：
+
+- 保持 embedding 模型和维度不变。
+- 或清空/新建 mem0 collection。
+- 或修改 `MEM0_COLLECTION_NAME` 使用新集合。
+
+### 本地 Qdrant 提示 payload index 无效
+
+本地 Qdrant 文件存储会提示：
+
+```text
+Payload indexes have no effect in the local Qdrant.
+```
+
+这是警告，不影响基本使用。需要 payload index 性能时，改用独立 Qdrant Server。
+
+### 知识库删除后还有旧内容
+
+确认删除流程是否同时删除：
+
+- `knowledge_documents`
+- `knowledge_parent_chunks`
+- `knowledge_chunks`
+- Chroma 向量记录
+- 上传文件本体
+
+如果 Chroma 内仍有旧数据，可停止服务后清理 `chroma_db/` 并重新同步。
+
+### RAGAS 分数怎么看
+
+一般判断：
+
+- `faithfulness` 高：回答比较忠实，不容易胡编。
+- `context_precision` 高：召回片段噪声少。
+- `context_recall` 低：有关键资料没召回。
+- `answer_relevancy` 低：回答不够聚焦，可能是模型能力、prompt 或上下文噪声导致。
+
+如果 `context_precision` 和 `faithfulness` 都高，但 `answer_relevancy` 低，优先改回答 prompt，让模型只回答问题直接需要的信息。
+
+### 前端 401
+
+登录态保存在浏览器 localStorage。重新登录或清理：
+
+```text
+localStorage.access_token
+```
 
 ### Skill 修改后没有生效
 
@@ -452,18 +696,21 @@ git status --short
 POST /skills/reload
 ```
 
-也可以在前端 Skill Library 中点击刷新/重载。
+或在前端 Skill 页面点击重新加载。
 
 ## 运行时数据
 
-运行时会产生以下文件或目录：
+这些目录会在运行时产生或更新：
 
 ```text
-datas/chat_multi_history.db   # LangGraph checkpoint
-datas/mem0/                   # mem0 本地记忆
-chroma_db/                    # Chroma/RAG 向量库
-logs/                         # 日志
-agent-frontend/dist/          # 前端构建产物
+datas/chat_multi_history.db
+datas/mem0/
+chroma_db/
+logs/
+agent-frontend/dist/
+data/uploads/
+eval/results/
 ```
 
-这些文件属于运行时数据，不建议手动修改。需要重置时应先停止后端服务。
+需要重置运行时数据时，先停止后端服务，再清理对应目录。不要在服务运行时直接删除本地 Qdrant、Chroma 或数据库相关文件。
+

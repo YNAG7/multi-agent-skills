@@ -13,3 +13,9 @@ export async function getMonitorRuns(limit = 50): Promise<AgentRun[]> {
 export async function getMonitorRunDetail(runId: string): Promise<AgentRunDetail> {
   return request<AgentRunDetail>(`/monitor/runs/${encodeURIComponent(runId)}`)
 }
+
+export async function deleteMonitorRun(runId: string): Promise<void> {
+  await request(`/monitor/runs/${encodeURIComponent(runId)}`, {
+    method: 'DELETE',
+  })
+}

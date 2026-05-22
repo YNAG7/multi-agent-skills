@@ -7,6 +7,7 @@ from backend.schemas.skill import (
     SkillCreate,
     SkillEnableUpdate,
     SkillImportFromDirectory,
+    SkillUpdate,
 )
 from backend.schemas.user import CurrentUser
 from backend.services import skill_service
@@ -104,6 +105,17 @@ async def set_skill_enabled(
 ):
     return {
         "skill": await skill_service.set_skill_enabled(skill_name, req.enabled)
+    }
+
+
+@router.patch("/{skill_name}")
+async def update_skill(
+    skill_name: str,
+    req: SkillUpdate,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    return {
+        "skill": await skill_service.update_skill_files(skill_name, req)
     }
 
 

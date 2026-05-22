@@ -14,9 +14,11 @@ import {
   ScrollText,
   Search,
   TerminalSquare,
+  Trash2,
   Wrench,
 } from 'lucide-vue-next'
 import {
+  deleteMonitorRun,
   getMonitorRunDetail,
   getMonitorRuns,
   getMonitorSummary,
@@ -49,6 +51,8 @@ const detail = ref<AgentRunDetail | null>(null)
 const searchText = ref('')
 const selectedNodeId = ref('')
 const activeTab = ref<'io' | 'meta'>('io')
+const deletingRunId = ref('')
+const pendingDeleteRun = ref<AgentRun | null>(null)
 
 const displayName = computed(() => props.user.nickname || props.user.username)
 
@@ -248,6 +252,43 @@ async function selectRun(runId: string) {
   }
 }
 
+function requestDeleteRun(run: AgentRun) {
+  if (deletingRunId.value) return
+  pendingDeleteRun.value = run
+}
+
+function closeDeleteDialog() {
+  if (deletingRunId.value) return
+  pendingDeleteRun.value = null
+}
+
+async function confirmDeleteRun() {
+  const runId = pendingDeleteRun.value?.run_id || ''
+  if (!runId || deletingRunId.value) return
+
+  deletingRunId.value = runId
+  error.value = ''
+
+  try {
+    await deleteMonitorRun(runId)
+    pendingDeleteRun.value = null
+    runs.value = runs.value.filter((item) => item.run_id !== runId)
+    summary.value = await getMonitorSummary()
+
+    if (selectedRunId.value === runId) {
+      const nextRunId = runs.value[0]?.run_id || ''
+      selectedRunId.value = ''
+      detail.value = null
+      selectedNodeId.value = ''
+      if (nextRunId) await selectRun(nextRunId)
+    }
+  } catch (e: any) {
+    error.value = e.message || '删除监控记录失败。'
+  } finally {
+    deletingRunId.value = ''
+  }
+}
+
 onMounted(refreshMonitor)
 </script>
 
@@ -301,14 +342,27 @@ onMounted(refreshMonitor)
         </div>
 
         <template v-else>
-          <button
+          <div
             v-for="run in filteredRuns"
             :key="run.run_id"
             class="monitor-run-item"
             :class="{ 'nx-active': selectedRunId === run.run_id, failed: run.status === 'failed' }"
-            type="button"
+            role="button"
+            tabindex="0"
             @click="selectRun(run.run_id)"
+            @keydown.enter.prevent="selectRun(run.run_id)"
+            @keydown.space.prevent="selectRun(run.run_id)"
           >
+            <button
+              class="monitor-run-delete"
+              type="button"
+              title="删除监控记录"
+              :disabled="deletingRunId === run.run_id"
+              @click.stop="requestDeleteRun(run)"
+            >
+              <Loader2 v-if="deletingRunId === run.run_id" class="nx-spin" :size="14" />
+              <Trash2 v-else :size="14" />
+            </button>
             <div class="monitor-run-top">
               <span>{{ statusText(run.status) }}</span>
               <small>{{ formatLatency(run.latency_ms) }}</small>
@@ -322,7 +376,7 @@ onMounted(refreshMonitor)
               <span>{{ run.main_skill || '未识别技能' }}</span>
               <small>{{ run.run_id.slice(0, 8) }}</small>
             </div>
-          </button>
+          </div>
         </template>
       </div>
 
@@ -527,6 +581,52 @@ onMounted(refreshMonitor)
         </template>
       </div>
     </main>
+
+    <div v-if="pendingDeleteRun" class="monitor-delete-overlay" @click.self="closeDeleteDialog">
+      <section
+        class="monitor-delete-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="monitor-delete-title"
+      >
+        <div class="monitor-delete-icon">
+          <Trash2 :size="22" />
+        </div>
+
+        <div class="monitor-delete-copy">
+          <p class="nx-skill-kicker">Delete run</p>
+          <h3 id="monitor-delete-title">删除这条监控记录？</h3>
+          <p>会同时移除该 run 的执行链路、步骤和工具调用记录，不影响聊天历史。</p>
+
+          <div class="monitor-delete-preview">
+            <label>输入预览</label>
+            <strong>{{ previewText(pendingDeleteRun.input, 96) || pendingDeleteRun.run_id }}</strong>
+            <small>{{ pendingDeleteRun.run_id.slice(0, 8) }} / {{ formatTime(pendingDeleteRun.started_at) }}</small>
+          </div>
+        </div>
+
+        <div class="monitor-delete-actions">
+          <button
+            class="monitor-delete-cancel"
+            type="button"
+            :disabled="!!deletingRunId"
+            @click="closeDeleteDialog"
+          >
+            取消
+          </button>
+          <button
+            class="monitor-delete-confirm"
+            type="button"
+            :disabled="!!deletingRunId"
+            @click="confirmDeleteRun"
+          >
+            <Loader2 v-if="deletingRunId" class="nx-spin" :size="16" />
+            <Trash2 v-else :size="16" />
+            <span>{{ deletingRunId ? '删除中' : '删除记录' }}</span>
+          </button>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -903,9 +1003,10 @@ onMounted(refreshMonitor)
 }
 
 .monitor-run-item {
+  position: relative;
   width: 100%;
   margin-bottom: 8px;
-  padding: 11px 12px;
+  padding: 11px 38px 11px 12px;
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
@@ -929,6 +1030,32 @@ onMounted(refreshMonitor)
   border-color: rgba(239, 68, 68, 0.28);
 }
 
+.monitor-run-delete {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.32);
+  color: #cbd5e1;
+  cursor: pointer;
+}
+
+.monitor-run-delete:hover {
+  background: rgba(239, 68, 68, 0.18);
+  color: #fecaca;
+}
+
+.monitor-run-delete:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
 .monitor-run-top,
 .monitor-run-meta,
 .monitor-top-actions,
@@ -938,6 +1065,10 @@ onMounted(refreshMonitor)
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+}
+
+.monitor-run-top {
+  padding-right: 30px;
 }
 
 .monitor-run-top span,
@@ -962,6 +1093,144 @@ onMounted(refreshMonitor)
   color: #cbd5e1;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.monitor-delete-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.48);
+  backdrop-filter: blur(3px);
+}
+
+.monitor-delete-dialog {
+  width: min(460px, calc(100vw - 32px));
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.24);
+}
+
+.monitor-delete-icon {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+.monitor-delete-copy {
+  min-width: 0;
+}
+
+.monitor-delete-copy .nx-skill-kicker {
+  margin-bottom: 2px;
+  color: #dc2626;
+}
+
+.monitor-delete-copy h3 {
+  margin: 0 0 6px;
+  color: #0f172a;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.monitor-delete-copy p:not(.nx-skill-kicker) {
+  margin: 0;
+  color: #64748b;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.monitor-delete-preview {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.monitor-delete-preview label {
+  display: block;
+  margin-bottom: 6px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.monitor-delete-preview strong {
+  display: block;
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.monitor-delete-preview small {
+  display: block;
+  margin-top: 8px;
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.monitor-delete-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.monitor-delete-cancel,
+.monitor-delete-confirm {
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.monitor-delete-cancel {
+  border: 1px solid #e2e8f0;
+  background: #ffffff;
+  color: #334155;
+}
+
+.monitor-delete-cancel:hover {
+  background: #f8fafc;
+}
+
+.monitor-delete-confirm {
+  border: 1px solid #dc2626;
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.monitor-delete-confirm:hover {
+  border-color: #b91c1c;
+  background: #b91c1c;
+}
+
+.monitor-delete-cancel:disabled,
+.monitor-delete-confirm:disabled {
+  cursor: progress;
+  opacity: 0.72;
 }
 
 .monitor-content {

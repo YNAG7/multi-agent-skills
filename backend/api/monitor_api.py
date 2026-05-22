@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from backend.db.database import get_db
 from backend.deps import require_admin
 from backend.repositories.monitor_repository import (
+    delete_agent_run,
     get_agent_run,
     get_monitor_summary,
     list_agent_run_steps,
@@ -573,6 +574,21 @@ def runs(
             _run_payload(run, db=db)
             for run in list_agent_runs(db=db, limit=limit)
         ]
+    }
+
+
+@router.delete("/runs/{run_id}")
+def delete_run(
+    run_id: str,
+    _: CurrentUser = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    deleted = delete_agent_run(db=db, run_id=run_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    return {
+        "deleted": True
     }
 
 

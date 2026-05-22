@@ -11,7 +11,7 @@ from typing import Any
 import yaml
 from fastapi import HTTPException, UploadFile
 
-from backend.schemas.skill import SkillCreate
+from backend.schemas.skill import SkillCreate, SkillUpdate
 from skills.auto_script_loader import load_script_tools_with_errors
 from skills.registry import (
     SKILL_REGISTRY,
@@ -186,6 +186,26 @@ def _ensure_skill_json(skill_dir: Path, name: str, description: str, enabled: bo
     _write_json(skill_json, data)
 
 
+def _normalize_skill_json(
+    data: dict[str, Any] | None,
+    name: str,
+    description: str,
+    needs_time_context: bool | None = None,
+) -> dict[str, Any]:
+    normalized = dict(data or {})
+    normalized["name"] = name
+    normalized["description"] = str(normalized.get("description") or description).strip()
+    normalized.setdefault("enabled", True)
+
+    if needs_time_context is not None:
+        normalized["needs_time_context"] = needs_time_context
+
+    if not normalized["description"]:
+        raise HTTPException(status_code=400, detail="Skill description is required for routing")
+
+    return normalized
+
+
 def _copy_tree_to_registry(source_dir: Path, target_dir: Path) -> None:
     if target_dir.exists():
         raise HTTPException(status_code=409, detail="Skill already exists")
@@ -288,12 +308,27 @@ async def create_prompt_skill(req: SkillCreate) -> dict[str, Any]:
     if req.needs_time_context:
         meta["needs_time_context"] = True
 
-    yaml_text = yaml.safe_dump(meta, allow_unicode=True, sort_keys=False)
-    (skill_dir / "SKILL.md").write_text(
-        f"---\n{yaml_text}---\n\n{req.content.strip()}\n",
-        encoding="utf-8",
+    content = req.content.strip()
+    if content.startswith("---"):
+        skill_md = content
+    else:
+        yaml_text = yaml.safe_dump(meta, allow_unicode=True, sort_keys=False)
+        skill_md = f"---\n{yaml_text}---\n\n{content}"
+
+    (skill_dir / "SKILL.md").write_text(f"{skill_md}\n", encoding="utf-8")
+    skill_json = _normalize_skill_json(
+        req.skill_json,
+        skill_name,
+        req.description.strip(),
+        needs_time_context=req.needs_time_context,
     )
-    _ensure_skill_json(skill_dir, skill_name, req.description.strip(), enabled=True)
+    _write_json(skill_dir / "skill.json", skill_json)
+
+    try:
+        _load_preview(skill_dir)
+    except Exception:
+        shutil.rmtree(skill_dir, ignore_errors=True)
+        raise
 
     await reload_runtime()
 
@@ -486,6 +521,60 @@ async def set_skill_enabled(skill_name: str, enabled: bool) -> dict[str, Any]:
         raise HTTPException(status_code=500, detail="Skill updated but not loaded")
 
     return skill_payload(updated)
+
+
+async def update_skill_files(skill_name: str, req: SkillUpdate) -> dict[str, Any]:
+    lookup_name = normalize_skill_name(skill_name)
+    skill = SKILL_REGISTRY.get(skill_name) or SKILL_REGISTRY.get(lookup_name)
+    if skill is None:
+        raise HTTPException(status_code=404, detail="Skill not found")
+
+    canonical_name = normalize_skill_name(skill.name)
+    if canonical_name in PROTECTED_SKILLS:
+        raise HTTPException(status_code=400, detail="Protected skill cannot be edited")
+
+    root = skills_file_root()
+    skill_dir = Path(skill.skill_dir).resolve()
+
+    if not _is_path_inside(root, skill_dir):
+        raise HTTPException(status_code=400, detail="Only file skills can be edited")
+
+    next_json = _normalize_skill_json(
+        req.skill_json,
+        canonical_name,
+        skill.description,
+        needs_time_context=None,
+    )
+
+    json_name = normalize_skill_name(str(next_json.get("name") or canonical_name))
+    if json_name != canonical_name:
+        raise HTTPException(status_code=400, detail="Renaming skills is not supported")
+
+    skill_md = req.skill_md.strip()
+    if not skill_md:
+        raise HTTPException(status_code=400, detail="SKILL.md cannot be empty")
+
+    with tempfile.TemporaryDirectory(prefix="skill_update_") as temp_name:
+        temp_dir = Path(temp_name) / canonical_name
+        shutil.copytree(
+            skill_dir,
+            temp_dir,
+            ignore=shutil.ignore_patterns("__pycache__", "*.pyc", "*.pyo", "*.pyd"),
+        )
+        (temp_dir / "SKILL.md").write_text(f"{skill_md}\n", encoding="utf-8")
+        _write_json(temp_dir / "skill.json", next_json)
+        _load_preview(temp_dir)
+
+    (skill_dir / "SKILL.md").write_text(f"{skill_md}\n", encoding="utf-8")
+    _write_json(skill_dir / "skill.json", next_json)
+
+    await reload_runtime()
+
+    updated = SKILL_REGISTRY.get(canonical_name)
+    if updated is None:
+        raise HTTPException(status_code=500, detail="Skill updated but not loaded")
+
+    return get_skill_detail(updated.name)
 
 
 async def delete_skill(skill_name: str) -> None:

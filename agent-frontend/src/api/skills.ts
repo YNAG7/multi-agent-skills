@@ -4,6 +4,7 @@ import type {
   SkillCreatePayload,
   SkillDetail,
   SkillImportPreview,
+  SkillUpdatePayload,
 } from '../types/skill'
 
 export async function getSkills(): Promise<Skill[]> {
@@ -71,6 +72,15 @@ export async function setSkillEnabled(skillName: string, enabled: boolean): Prom
   const data = await request<{ skill: Skill }>(`/skills/${encodeURIComponent(skillName)}/enabled`, {
     method: 'PATCH',
     body: JSON.stringify({ enabled }),
+  })
+
+  return data.skill
+}
+
+export async function updateSkill(skillName: string, payload: SkillUpdatePayload): Promise<SkillDetail> {
+  const data = await request<{ skill: SkillDetail }>(`/skills/${encodeURIComponent(skillName)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
   })
 
   return data.skill
